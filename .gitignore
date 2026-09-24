@@ -1,0 +1,13 @@
+# secrets — never commit
+backend/.clasp.json
+backend/.clasprc.json
+.env
+*.local
+
+# noise
+node_modules/
+.DS_Store
+*.log
+
+# local-only notes
+NOTES.md

@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>plug</title>
+    <link rel="stylesheet" href="panel.css" />
+  </head>
+  <body>
+    <header class="masthead">
+      <h1 class="wordmark">plug</h1>
+      <p class="tagline">find your <em>plug</em>, get the referral.</p>
+    </header>
+
+    <div class="act">
+      <button id="capture" class="btn-primary" type="button">capture this job</button>
+      <p id="status" class="status" role="status" aria-live="polite"></p>
+    </div>
+
+    <main id="list" class="list"></main>
+
+    <footer class="footer">
+      <span id="count">0 jobs</span>
+      <span class="dot">·</span>
+      <span>day 1 — capture only</span>
+    </footer>
+
+    <!-- one job = one ticket. cloned per job, filled with textContent only. -->
+    <template id="ticket-tpl">
+      <article class="ticket">
+        <div class="ticket-top">
+          <h2 class="role" data-field="role"></h2>
+          <button class="drop" type="button" title="drop this job" aria-label="drop this job">
+            ×
+          </button>
+        </div>
+
+        <div class="rows">
+          <div class="row">
+            <span class="key">company</span>
+            <input class="val" data-edit="company" spellcheck="false" placeholder="—" />
+          </div>
+          <div class="row">
+            <span class="key">role</span>
+            <input class="val" data-edit="role" spellcheck="false" placeholder="—" />
+          </div>
+          <div class="row">
+            <span class="key">where</span>
+            <input class="val" data-edit="location" spellcheck="false" placeholder="—" />
+          </div>
+          <div class="row">
+            <span class="key">via</span>
+            <span class="val val-static source"></span>
+          </div>
+          <div class="row">
+            <span class="key">caught</span>
+            <span class="val val-static when"></span>
+          </div>
+        </div>
+
+        <hr class="perf" />
+
+        <details class="jd-wrap">
+          <summary class="jd-summary"></summary>
+          <pre class="jd"></pre>
+        </details>
+
+        <div class="ticket-foot">
+          <span class="tag tag-status">draft</span>
+          <span class="tag tag-conf"></span>
+          <a class="src-link" target="_blank" rel="noreferrer">open</a>
+        </div>
+      </article>
+    </template>
+
+    <script src="panel.js"></script>
+  </body>
+</html>
