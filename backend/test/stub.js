@@ -81,7 +81,25 @@ global.SpreadsheetApp = {
 };
 
 // Apps Script files share one global scope; emulate that with indirect eval.
-for (const f of ["Sheet.gs", "Api.gs", "Setup.gs"]) {
+// UrlFetchApp is scripted per-test: push a response, the next fetch pops it.
+const fetchLog = [];
+let fetchQueue = [];
+global.__queueFetch = (r) => fetchQueue.push(r);
+global.__fetchLog = fetchLog;
+global.__resetFetch = () => { fetchQueue = []; fetchLog.length = 0; };
+global.UrlFetchApp = {
+  fetch: (url, params) => {
+    fetchLog.push({ url, params, body: params.payload ? JSON.parse(params.payload) : null });
+    const next = fetchQueue.shift();
+    if (!next) throw new Error("no queued fetch response for " + url);
+    return {
+      getResponseCode: () => next.code ?? 200,
+      getContentText: () => (typeof next.body === "string" ? next.body : JSON.stringify(next.body)),
+    };
+  },
+};
+
+for (const f of ["Sheet.gs", "Providers.gs", "Resume.gs", "Llm.gs", "Api.gs", "Setup.gs"]) {
   (0, eval)(fs.readFileSync(require("path").join(__dirname, "..", f), "utf8"));
 }
 module.exports = { props, books };

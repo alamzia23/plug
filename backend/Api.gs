@@ -22,6 +22,19 @@ var ROUTES = {
   listJobs: function (payload) {
     return listJobs_(Number(payload.limit) || 50);
   },
+  draftEmail: function (payload) {
+    return draftReferral_(payload);
+  },
+  llmInfo: function () {
+    var name = providerName_();
+    var p = PROVIDERS[name];
+    return {
+      provider: name,
+      model: getProp_('LLM_MODEL') || (p && p.defaultModel) || null,
+      keySet: Boolean(getProp_('LLM_API_KEY')),
+      known: Boolean(p),
+    };
+  },
 };
 
 function doPost(e) {

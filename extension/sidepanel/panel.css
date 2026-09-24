@@ -500,3 +500,71 @@ details[open] > .jd-summary::before {
 .tag-sync:not([data-sync]) {
   display: none;
 }
+
+/* ---------- draft ---------- */
+
+.draft-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.draft-body .field input,
+.draft-body textarea {
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--ink);
+  background: transparent;
+  border: var(--line);
+  border-radius: 2px;
+  padding: 8px;
+  width: 100%;
+  text-transform: none;
+  resize: vertical;
+}
+
+.draft-body .field input:focus,
+.draft-body textarea:focus {
+  outline: none;
+  border-color: var(--hot);
+}
+
+.bullets {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.bullet-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.bullet-list textarea {
+  rows: 2;
+}
+
+.draft-meta {
+  font-size: 10px;
+  margin: 0;
+}
+
+.draft-meta[data-over="true"] {
+  color: var(--hot);
+}
+
+.draft-actions {
+  margin-top: 12px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.draft-actions .btn-primary {
+  width: auto;
+  padding: 8px 14px;
+}

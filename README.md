@@ -6,7 +6,7 @@ A personal referral agent: capture a job page, find the right people at that com
 draft a personal referral email + tailored resume, send it from your Gmail after you
 approve, and follow up automatically.
 
-Status: **day 2 done — apps script backend + sheet.** Landing site scaffolded in `site/`. Nothing sends mail yet; captured jobs
+Status: **day 3 done — drafting + review panel.** Nothing sends mail yet (day 4). Nothing sends mail yet; captured jobs
 sync to a Google Sheet you own.
 
 ## Load the extension
@@ -78,8 +78,10 @@ column names to object keys, so adding a column later won't break old rows.
 node backend/test/run.js
 ```
 
-Runs `Api.gs` / `Sheet.gs` / `Setup.gs` against in-memory stubs of the Apps Script
-globals — auth, upsert-by-url, ordering, the 45k JD cap. Zero dependencies.
+Runs every `.gs` file against in-memory stubs of the Apps Script globals — auth,
+upsert-by-url, ordering, the 45k JD cap, column migration, per-provider request shapes,
+error paths, and JSON parsing. `UrlFetchApp` is scripted per test, so no provider is ever
+actually called. Zero dependencies.
 
 ## Where capture gets its data
 
@@ -92,6 +94,29 @@ globals — auth, upsert-by-url, ordering, the 45k JD cap. Zero dependencies.
 | generic | JSON-LD `JobPosting` first (workday, ashby, smartrecruiters, indeed), then opengraph + `h1`, then page title + largest text block |
 
 JD text is whitespace-collapsed and capped at 8000 characters.
+
+## Drafting (day 3)
+
+The LLM layer is **provider-neutral**. `Llm.gs` builds prompts and parses answers;
+`Providers.gs` owns every provider-specific detail — url, auth header, body shape, where
+the text lives in the reply. Nothing above `Providers.gs` knows which model answered.
+
+| Script Property | values | default |
+| --- | --- | --- |
+| `LLM_PROVIDER` | `gemini` · `anthropic` · `openai` | `gemini` |
+| `LLM_API_KEY` | that provider's key | — |
+| `LLM_MODEL` | optional override | per-provider default |
+
+Switching providers is two properties. Adding one is a single entry in `PROVIDERS` — no
+prompt or caller changes. Gemini is the default only because of its free tier and the ₹0
+target, not because anything is coupled to it.
+
+One call returns the email and the tailored bullets together. The panel shows the draft
+with subject, body and three bullets all editable, a live word count, which model wrote
+it, and a **regenerate** button. Edits are kept — regenerate is explicit.
+
+Model replies get parsed leniently (bare JSON, fenced JSON, or JSON with chatter around
+it), because every provider ignores "no markdown fence" eventually.
 
 ## The site (`site/`)
 
@@ -130,6 +155,9 @@ backend/
   appsscript.json        # web app manifest (execute as me, access anyone)
   Api.gs                 # doPost router + shared-token auth
   Sheet.gs               # the Sheet as a database
+  Providers.gs           # gemini | anthropic | openai, behind one call
+  Llm.gs                 # provider-neutral prompts + parsing
+  Resume.gs              # dummy master resume
   Setup.gs               # setUp(): makes the sheet, token and defaults
   test/                  # node stubs — run the .gs logic without deploying
 ```
@@ -148,7 +176,11 @@ Selectors were run against real postings, not guessed:
 
 ## Known gaps (day 1)
 
-- No drafting, no email, no people finder. Days 3–7.
+- No email sending and no people finder. Days 4–7. The panel's **send** button is
+  present but disabled until day 4.
+- The contact is dummy data (`priya raman`), editable per card, until the people finder
+  lands on day 7.
+- Drafts live in `chrome.storage.local`, not the Sheet. Day 4 logs sends to `outreach`.
 - `listJobs` exists on the backend but the panel never calls it — the panel is still
   the source of truth and pushes one way. Two-way sync isn't needed until there's a
   second client.

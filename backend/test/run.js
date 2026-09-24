@@ -65,5 +65,146 @@ post({ action:"saveJob", token:TOKEN, payload:{ job: { url:"https://big.com/1", 
 check("jd truncated below the 50k cell limit",
   readAll_("jobs").find(j=>j.url==="https://big.com/1").jd.length === 45000);
 
+console.log("\ncolumn migration");
+{
+  // Simulate a later day adding a column to a sheet that already has rows.
+  SCHEMAS.jobs.push("draft_subject");
+  const before = readAll_("jobs").length;
+  tab_("jobs"); // triggers the migration
+  check("new column appended to header", headers_(tab_("jobs")).includes("draft_subject"));
+  check("existing rows survive", readAll_("jobs").length === before);
+
+  // The bug this guards: writes must follow the SHEET's column order, not the
+  // schema's, or an appended column shifts every value one place.
+  post({ action: "saveJob", token: TOKEN, payload: { job: {
+    url: "https://after-migration.com/1", company: "Acme", role: "Engineer", jd: "z".repeat(120) } } });
+  const row = readAll_("jobs").find((j) => j.url === "https://after-migration.com/1");
+  check("company lands in the company column", row.company === "Acme", row.company);
+  check("role lands in the role column", row.role === "Engineer", row.role);
+  check("url lands in the url column", row.url === "https://after-migration.com/1");
+  SCHEMAS.jobs.pop();
+}
+
+console.log("\nprovider routing");
+const P = PropertiesService.getScriptProperties();
+const geminiOk = { candidates: [{ content: { parts: [{ text: '{"subject":"referral for the frontend role?","body":"Hi Priya, I saw the posting.","bullets":["a","b","c"]}' }] } }] };
+
+{
+  P.setProperty("LLM_API_KEY", "test-key");
+  P.setProperty("LLM_PROVIDER", "gemini");
+  __resetFetch(); __queueFetch({ body: geminiOk });
+  const d = post({ action: "draftEmail", token: TOKEN, payload: {
+    job: { company: "Ramp", role: "Frontend Engineer", jd: "React, design systems" },
+    contact: { name: "Priya", title: "EM" } } });
+  check("gemini draft succeeds", d.ok === true, d);
+  check("reports provider", d.data.provider === "gemini");
+  check("reports model", d.data.model === "gemini-2.5-flash", d.data.model);
+  check("subject parsed", d.data.subject.startsWith("referral"));
+  check("3 bullets", d.data.bullets.length === 3);
+  check("word count computed", d.data.words === 6, d.data.words);
+  const call = __fetchLog[0];
+  check("gemini key goes in the query string", call.url.includes("key=test-key"));
+  check("gemini gets systemInstruction", !!call.body.systemInstruction);
+  check("gemini json mode on", call.body.generationConfig.responseMimeType === "application/json");
+}
+
+{
+  P.setProperty("LLM_PROVIDER", "anthropic");
+  __resetFetch();
+  __queueFetch({ body: { content: [{ type: "text", text: '{"subject":"s","body":"b","bullets":["x"]}' }] } });
+  const d = post({ action: "draftEmail", token: TOKEN, payload: { job: { role: "Engineer" }, contact: {} } });
+  check("anthropic draft succeeds", d.ok === true, d);
+  check("anthropic default model", d.data.model === "claude-opus-5", d.data.model);
+  const call = __fetchLog[0];
+  check("anthropic auth header", call.params.headers["x-api-key"] === "test-key");
+  check("anthropic version header", call.params.headers["anthropic-version"] === "2023-06-01");
+  check("anthropic system is top-level", typeof call.body.system === "string" && call.body.system.length > 0);
+  check("anthropic sends max_tokens", call.body.max_tokens === 1600);
+  check("no prefill assistant turn", call.body.messages.every((m) => m.role !== "assistant"));
+}
+
+{
+  P.setProperty("LLM_PROVIDER", "openai");
+  __resetFetch();
+  __queueFetch({ body: { choices: [{ message: { content: '{"subject":"s","body":"b","bullets":[]}' } }] } });
+  const d = post({ action: "draftEmail", token: TOKEN, payload: { job: { role: "Engineer" }, contact: {} } });
+  check("openai draft succeeds", d.ok === true, d);
+  const call = __fetchLog[0];
+  check("openai bearer auth", call.params.headers.Authorization === "Bearer test-key");
+  check("openai system as a message", call.body.messages[0].role === "system");
+  check("openai json mode on", call.body.response_format.type === "json_object");
+}
+
+{
+  P.setProperty("LLM_MODEL", "some-other-model");
+  __resetFetch(); __queueFetch({ body: { choices: [{ message: { content: '{"subject":"s","body":"b"}' } }] } });
+  const d = post({ action: "draftEmail", token: TOKEN, payload: { job: { role: "E" }, contact: {} } });
+  check("LLM_MODEL overrides the default", d.data.model === "some-other-model", d.data.model);
+  P.setProperty("LLM_MODEL", "");
+}
+
+console.log("\nprovider failures");
+{
+  P.setProperty("LLM_PROVIDER", "nope");
+  const d = post({ action: "draftEmail", token: TOKEN, payload: { job: { role: "E" }, contact: {} } });
+  check("unknown provider is named in the error", /unknown LLM_PROVIDER/.test(d.error), d.error);
+  P.setProperty("LLM_PROVIDER", "gemini");
+}
+{
+  __resetFetch(); __queueFetch({ code: 429, body: { error: { message: "rate limit hit" } } });
+  const d = post({ action: "draftEmail", token: TOKEN, payload: { job: { role: "E" }, contact: {} } });
+  check("http error surfaces provider message", /429/.test(d.error) && /rate limit hit/.test(d.error), d.error);
+}
+{
+  __resetFetch(); __queueFetch({ body: { candidates: [{ finishReason: "MAX_TOKENS", content: { parts: [] } }] } });
+  const d = post({ action: "draftEmail", token: TOKEN, payload: { job: { role: "E" }, contact: {} } });
+  check("truncated reply is an error, not a bad draft", /token cap/.test(d.error), d.error);
+}
+{
+  __resetFetch(); __queueFetch({ body: { candidates: [{ content: { parts: [{ text: "sorry, here you go: not json" }] } }] } });
+  const d = post({ action: "draftEmail", token: TOKEN, payload: { job: { role: "E" }, contact: {} } });
+  check("unparseable reply is an error", /usable json/.test(d.error), d.error);
+}
+{
+  P.setProperty("LLM_API_KEY", "");
+  const d = post({ action: "draftEmail", token: TOKEN, payload: { job: { role: "E" }, contact: {} } });
+  check("missing key is a clear error", /LLM_API_KEY/.test(d.error), d.error);
+  P.setProperty("LLM_API_KEY", "test-key");
+}
+{
+  const d = post({ action: "draftEmail", token: TOKEN, payload: { job: {}, contact: {} } });
+  check("empty job rejected before any api call", /role or a company/.test(d.error), d.error);
+}
+
+console.log("\njson tolerance");
+check("bare json", parseJsonLoose_('{"a":1}').a === 1);
+check("fenced json", parseJsonLoose_('```json\n{"a":2}\n```').a === 2);
+check("unlabelled fence", parseJsonLoose_('```\n{"a":3}\n```').a === 3);
+check("json with chatter around it", parseJsonLoose_('Sure!\n{"a":4}\nHope that helps').a === 4);
+
+console.log("\nprompt content");
+{
+  __resetFetch(); __queueFetch({ body: geminiOk });
+  post({ action: "draftEmail", token: TOKEN, payload: {
+    job: { company: "Ramp", role: "Frontend Engineer", jd: "x".repeat(9000) },
+    contact: { name: "Priya", title: "EM" } } });
+  const body = __fetchLog[0].body;
+  const user = body.contents[0].parts[0].text;
+  const system = body.systemInstruction.parts[0].text;
+  check("jd truncated into the prompt", user.length < 8000, user.length);
+  check("contact name in prompt", user.includes("Priya"));
+  check("resume name in prompt", user.includes(MASTER_RESUME.name));
+  check("resume bullets in prompt", user.includes("design system"));
+  check("word limit stated", /UNDER 120 words/.test(system));
+  check("buzzwords banned", /synergy/.test(system));
+}
+
+console.log("\nllmInfo");
+{
+  const info = post({ action: "llmInfo", token: TOKEN, payload: {} }).data;
+  check("reports configured provider", info.provider === "gemini");
+  check("reports key is set without leaking it", info.keySet === true && !JSON.stringify(info).includes("test-key"));
+}
+
 console.log(`\n${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);

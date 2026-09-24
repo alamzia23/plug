@@ -84,6 +84,42 @@
           <pre class="jd"></pre>
         </details>
 
+        <div class="draft" hidden>
+          <hr class="perf" />
+          <div class="rows">
+            <div class="row">
+              <span class="key">to</span>
+              <input class="val" data-contact="name" spellcheck="false" placeholder="name" />
+            </div>
+            <div class="row">
+              <span class="key">their job</span>
+              <input class="val" data-contact="title" spellcheck="false" placeholder="title" />
+            </div>
+          </div>
+
+          <div class="draft-body" hidden>
+            <label class="field">
+              <span class="key">subject</span>
+              <input class="d-subject" spellcheck="false" />
+            </label>
+            <label class="field">
+              <span class="key">body</span>
+              <textarea class="d-body" rows="9"></textarea>
+            </label>
+            <div class="bullets">
+              <span class="key">bullets</span>
+              <div class="bullet-list"></div>
+            </div>
+            <p class="draft-meta muted"></p>
+          </div>
+
+          <div class="draft-actions">
+            <button class="btn-ghost d-draft" type="button">write the email</button>
+            <button class="btn-ghost d-regen" type="button" hidden>regenerate</button>
+            <button class="btn-primary d-send" type="button" disabled hidden>send · day 4</button>
+          </div>
+        </div>
+
         <div class="ticket-foot">
           <span class="tag tag-status">draft</span>
           <span class="tag tag-conf"></span>

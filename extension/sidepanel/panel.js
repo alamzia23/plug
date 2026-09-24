@@ -4,6 +4,9 @@
 
 const STORE_KEY = "jobs";
 
+// Dummy until the people finder lands on day 7. Editable in the card.
+const DUMMY_CONTACT = { name: "priya raman", title: "engineering manager" };
+
 const els = {
   capture: document.getElementById("capture"),
   status: document.getElementById("status"),
@@ -106,6 +109,96 @@ function upsert(job) {
   }
 }
 
+// ---------- draft ----------
+
+function wireDraft(node, job) {
+  const draft = node.querySelector(".draft");
+  const bodyBox = node.querySelector(".draft-body");
+  const btnDraft = node.querySelector(".d-draft");
+  const btnRegen = node.querySelector(".d-regen");
+  const btnSend = node.querySelector(".d-send");
+  const meta = node.querySelector(".draft-meta");
+
+  // Drafting needs the backend; without it the section is just noise.
+  if (!backendConfigured) return;
+  draft.hidden = false;
+
+  const contact = job.contact || { ...DUMMY_CONTACT };
+  for (const input of node.querySelectorAll("[data-contact]")) {
+    const field = input.dataset.contact;
+    input.value = contact[field] || "";
+    input.addEventListener("change", async () => {
+      const target = jobs.find((j) => j.id === job.id);
+      if (!target) return;
+      target.contact = { ...(target.contact || DUMMY_CONTACT), [field]: input.value.trim() };
+      await saveJobs();
+    });
+  }
+
+  const paint = (d) => {
+    bodyBox.hidden = false;
+    btnRegen.hidden = false;
+    btnSend.hidden = false;
+    btnDraft.hidden = true;
+
+    node.querySelector(".d-subject").value = d.subject;
+    node.querySelector(".d-body").value = d.body;
+
+    const list = node.querySelector(".bullet-list");
+    list.replaceChildren();
+    for (const [i, text] of (d.bullets || []).entries()) {
+      const ta = document.createElement("textarea");
+      ta.rows = 2;
+      ta.value = text;
+      ta.addEventListener("change", () => saveDraftEdit(job.id, "bullets", i, ta.value));
+      list.append(ta);
+    }
+
+    meta.textContent = `${d.words} words · ${d.provider}/${d.model}` + (d.overLength ? " · over 120, trim it" : "");
+    meta.dataset.over = String(Boolean(d.overLength));
+  };
+
+  node.querySelector(".d-subject").addEventListener("change", (e) => saveDraftEdit(job.id, "subject", null, e.target.value));
+  node.querySelector(".d-body").addEventListener("change", (e) => saveDraftEdit(job.id, "body", null, e.target.value));
+
+  if (job.draft) paint(job.draft);
+
+  const run = async (btn, label) => {
+    const original = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = label;
+    try {
+      const target = jobs.find((j) => j.id === job.id);
+      const draftOut = await callBackend("draftEmail", {
+        job: { company: target.company, role: target.role, location: target.location, jd: target.jd },
+        contact: target.contact || DUMMY_CONTACT,
+      });
+      target.draft = draftOut;
+      await saveJobs();
+      paint(draftOut);
+      say("drafted. read it before you send it.");
+    } catch (err) {
+      say("draft failed: " + (err.message || err), "bad");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = original;
+    }
+  };
+
+  btnDraft.addEventListener("click", () => run(btnDraft, "writing…"));
+  btnRegen.addEventListener("click", () => run(btnRegen, "rewriting…"));
+}
+
+// Edits are the point of the review step, so they're kept, not overwritten.
+async function saveDraftEdit(jobId, field, index, value) {
+  const target = jobs.find((j) => j.id === jobId);
+  if (!target || !target.draft) return;
+  if (field === "bullets") target.draft.bullets[index] = value;
+  else target.draft[field] = value;
+  if (field === "body") target.draft.words = value.trim() ? value.trim().split(/\s+/).length : 0;
+  await saveJobs();
+}
+
 // ---------- render ----------
 
 function ago(iso) {
@@ -173,6 +266,8 @@ function ticketFor(job) {
   const link = node.querySelector(".src-link");
   link.href = job.url;
   link.title = job.url;
+
+  wireDraft(node, job);
 
   node.querySelector(".drop").addEventListener("click", async () => {
     jobs = jobs.filter((j) => j.id !== job.id);

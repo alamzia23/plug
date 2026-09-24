@@ -39,6 +39,17 @@ function tab_(name) {
   if (sheet.getLastRow() === 0) {
     sheet.getRange(1, 1, 1, schema.length).setValues([schema]).setFontWeight('bold');
     sheet.setFrozenRows(1);
+    return sheet;
+  }
+
+  // Later days add columns. Append any the sheet is missing rather than
+  // rewriting the header, so a sheet with data in it keeps working.
+  var have = headers_(sheet);
+  var missing = schema.filter(function (col) {
+    return have.indexOf(col) === -1;
+  });
+  if (missing.length) {
+    sheet.getRange(1, have.length + 1, 1, missing.length).setValues([missing]).setFontWeight('bold');
   }
   return sheet;
 }
@@ -70,8 +81,13 @@ function readAll_(name) {
   });
 }
 
-function rowFor_(name, obj) {
-  return SCHEMAS[name].map(function (col) {
+/**
+ * Build a row in the SHEET's column order, not the schema's. Once columns can
+ * be appended by the migration above, the two orders can differ, and writing
+ * in schema order would silently put values in the wrong columns.
+ */
+function rowFor_(sheet, obj) {
+  return headers_(sheet).map(function (col) {
     var v = obj[col];
     return v === undefined || v === null ? '' : v;
   });
@@ -103,7 +119,7 @@ function saveJob_(job) {
     updated_at: now,
   };
 
-  var row = rowFor_('jobs', record);
+  var row = rowFor_(sheet, record);
   if (existing) {
     sheet.getRange(existing._row, 1, 1, row.length).setValues([row]);
   } else {
@@ -144,6 +160,6 @@ function setSetting_(key, value, notes) {
   if (hit) {
     sheet.getRange(hit._row, 2).setValue(value);
   } else {
-    sheet.appendRow(rowFor_('settings', { key: key, value: value, notes: notes || '' }));
+    sheet.appendRow(rowFor_(sheet, { key: key, value: value, notes: notes || '' }));
   }
 }
