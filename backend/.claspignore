@@ -1,0 +1,7 @@
+# node test harness — never belongs in the Apps Script project.
+# stub.js uses require() and redefines Apps Script globals; pushing it
+# breaks the project at load time.
+test/**
+**/*.md
+.clasp.json.example
+.claspignore
