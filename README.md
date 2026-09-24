@@ -6,7 +6,8 @@ A personal referral agent: capture a job page, find the right people at that com
 draft a personal referral email + tailored resume, send it from your Gmail after you
 approve, and follow up automatically.
 
-Status: **day 1 — extension skeleton + job capture.** Nothing sends. Nothing leaves your browser.
+Status: **day 2 — apps script backend + sheet.** Nothing sends mail yet; captured jobs
+sync to a Google Sheet you own.
 
 ## Load the extension
 
@@ -25,6 +26,60 @@ Captured jobs are stored in `chrome.storage.local` and shown as ticket cards.
 `company`, `role` and `where` are editable inline — edits save on blur. When a field
 comes back empty the card is tagged `check fields` so a drifted selector is visible
 rather than silent.
+
+## Set up the backend (day 2)
+
+You need this once. It takes about five minutes.
+
+1. Create the Apps Script project and push the code:
+
+   ```sh
+   npm i -g @google/clasp
+   clasp login
+   cd backend
+   clasp create --type standalone --title "plug backend"   # writes .clasp.json (gitignored)
+   clasp push
+   ```
+
+   No clasp? Make a project at <https://script.google.com>, then paste in
+   `Api.gs`, `Sheet.gs` and `Setup.gs` by hand.
+
+2. In the Apps Script editor, pick **setUp** in the function dropdown and hit **Run**.
+   Grant the scopes it asks for. The execution log prints your **sheet url** and your
+   **token** — keep the token, you'll need it in step 4. (`showToken()` prints it again.)
+
+3. **Deploy → New deployment → Web app**, with:
+   - *Execute as*: **Me**
+   - *Who has access*: **Anyone**
+
+   Copy the `/exec` url. "Anyone" is required because the extension has no Google
+   identity; the token is what actually guards the endpoint.
+
+4. In the side panel, open **backend**, paste the `/exec` url and the token, and hit
+   **save + test**. It should say `connected. dry run is on.`
+
+Re-running `setUp()` is safe: it never replaces an existing sheet or token.
+
+### What lands in the Sheet
+
+Four tabs, created by `setUp()`. The header row *is* the schema — reads and writes map
+column names to object keys, so adding a column later won't break old rows.
+
+| tab | holds |
+| --- | --- |
+| `jobs` | one row per captured posting, upserted by url |
+| `contacts` | day 7 |
+| `outreach` | day 4 |
+| `settings` | `DRY_RUN` (starts `true`), `TEST_INBOX`, `DAILY_CAP`, caps |
+
+### Testing the backend without deploying
+
+```sh
+node backend/test/run.js
+```
+
+Runs `Api.gs` / `Sheet.gs` / `Setup.gs` against in-memory stubs of the Apps Script
+globals — auth, upsert-by-url, ordering, the 45k JD cap. Zero dependencies.
 
 ## Where capture gets its data
 
@@ -47,7 +102,12 @@ extension/
   content/capture.js     # site adapters, injected on demand
   sidepanel/             # index.html, panel.css, panel.js
   assets/                # icons
-backend/                 # apps script — day 2
+backend/
+  appsscript.json        # web app manifest (execute as me, access anyone)
+  Api.gs                 # doPost router + shared-token auth
+  Sheet.gs               # the Sheet as a database
+  Setup.gs               # setUp(): makes the sheet, token and defaults
+  test/                  # node stubs — run the .gs logic without deploying
 ```
 
 ## What's been verified against live pages
@@ -64,7 +124,10 @@ Selectors were run against real postings, not guessed:
 
 ## Known gaps (day 1)
 
-- No backend, no sheet, no drafting, no sending. Days 2–4.
+- No drafting, no email, no people finder. Days 3–7.
+- `listJobs` exists on the backend but the panel never calls it — the panel is still
+  the source of truth and pushes one way. Two-way sync isn't needed until there's a
+  second client.
 - `host_permissions` is `<all_urls>` so capture works on any job board without a
   permission prompt mid-flow. Narrow it once the site list settles.
 - LinkedIn and Naukri obfuscate/rotate class names, and neither was testable without a

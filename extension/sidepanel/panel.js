@@ -10,6 +10,13 @@ const els = {
   list: document.getElementById("list"),
   count: document.getElementById("count"),
   tpl: document.getElementById("ticket-tpl"),
+  setup: document.getElementById("setup"),
+  cfgUrl: document.getElementById("cfg-url"),
+  cfgToken: document.getElementById("cfg-token"),
+  cfgSave: document.getElementById("cfg-save"),
+  cfgState: document.getElementById("cfg-state"),
+  syncState: document.getElementById("sync-state"),
+  syncAll: document.getElementById("sync-all"),
 };
 
 let jobs = [];
@@ -71,6 +78,13 @@ async function capture() {
         ? "got it. " + where + "."
         : "got it, but some fields came back empty. fix them below."
     );
+
+    // A capture is never lost to a backend problem: it's already on disk, and
+    // an unsynced job just shows a "pending" tag you can push later.
+    if (await backendReady()) {
+      const pushed = await pushJobs([jobs[0]]);
+      if (pushed.failed) say(els.status.textContent + " (not pushed: " + pushed.error + ")", "bad");
+    }
   } catch (err) {
     // Usually a page Chrome refuses to inject into (web store, pdf viewer, another extension).
     say("capture failed: " + (err.message || err), "bad");
@@ -85,7 +99,8 @@ function upsert(job) {
   if (i !== -1) {
     const kept = jobs[i];
     jobs.splice(i, 1);
-    jobs.unshift({ ...kept, ...job, id: kept.id, status: kept.status || "draft" });
+    // the content changed, so it owes the sheet another push
+    jobs.unshift({ ...kept, ...job, id: kept.id, status: kept.status || "draft", syncedAt: "" });
   } else {
     jobs.unshift({ ...job, id: crypto.randomUUID(), status: "draft" });
   }
@@ -142,6 +157,15 @@ function ticketFor(job) {
 
   node.querySelector(".tag-status").textContent = job.status || "draft";
 
+  const sync = node.querySelector(".tag-sync");
+  if (job.syncedAt) {
+    sync.dataset.sync = "synced";
+    sync.textContent = "on sheet";
+  } else if (backendConfigured) {
+    sync.dataset.sync = "pending";
+    sync.textContent = "not pushed";
+  }
+
   const conf = node.querySelector(".tag-conf");
   conf.dataset.conf = job.confidence;
   conf.textContent = job.confidence === "partial" ? "check fields" : "";
@@ -173,10 +197,117 @@ function render() {
   }
 
   els.count.textContent = jobs.length === 1 ? "1 job" : jobs.length + " jobs";
+  renderSyncState();
+}
+
+function pendingJobs() {
+  return jobs.filter((j) => !j.syncedAt);
+}
+
+function renderSyncState() {
+  if (!backendConfigured) {
+    els.syncState.textContent = "local only";
+    els.syncAll.hidden = true;
+    return;
+  }
+  const pending = pendingJobs().length;
+  els.syncState.textContent = pending ? pending + " not pushed" : "sheet in sync";
+  els.syncAll.hidden = pending === 0;
+}
+
+// ---------- backend ----------
+
+let backendConfigured = false;
+
+// One request for the whole batch — Apps Script is slow to start and the daily
+// quota counts invocations, not rows.
+async function pushJobs(batch) {
+  if (!batch.length) return { pushed: 0 };
+
+  try {
+    const results = await callBackend("saveJobs", {
+      jobs: batch.map(({ id, company, role, location, url, source, jd, confidence, status, capturedAt }) => ({
+        id, company, role, location, url, source, jd, confidence, status, capturedAt,
+      })),
+    });
+
+    const now = new Date().toISOString();
+    for (const r of results) {
+      const job = jobs.find((j) => j.url === r.url);
+      if (job) {
+        job.syncedAt = now;
+        job.remoteId = r.id;
+      }
+    }
+    await saveJobs();
+    render();
+    return { pushed: results.length };
+  } catch (err) {
+    return { failed: true, error: err.message || String(err) };
+  }
+}
+
+async function syncAll() {
+  const pending = pendingJobs();
+  if (!pending.length) return;
+
+  els.syncAll.disabled = true;
+  els.syncAll.textContent = "pushing…";
+  const res = await pushJobs(pending);
+  els.syncAll.disabled = false;
+  els.syncAll.textContent = "push";
+
+  say(res.failed ? "push failed: " + res.error : "pushed " + res.pushed + " to the sheet.", res.failed ? "bad" : "ok");
+}
+
+function cfgSay(msg, tone) {
+  els.cfgState.textContent = msg;
+  els.cfgState.dataset.tone = tone || "ok";
+}
+
+async function loadBackendForm() {
+  const conf = await getBackend();
+  els.cfgUrl.value = conf.url || "";
+  els.cfgToken.value = conf.token || "";
+  backendConfigured = Boolean(conf.url && conf.token);
+  if (!backendConfigured) els.setup.open = true;
+}
+
+async function saveBackendForm() {
+  const url = els.cfgUrl.value.trim();
+  const token = els.cfgToken.value.trim();
+
+  if (!/^https:\/\/script\.google\.com\/macros\/s\/.+\/exec$/.test(url)) {
+    cfgSay("that isn't a web app /exec url.", "bad");
+    return;
+  }
+  if (!token) {
+    cfgSay("token is empty.", "bad");
+    return;
+  }
+
+  await setBackend({ url, token });
+  els.cfgSave.disabled = true;
+  cfgSay("testing…");
+
+  try {
+    const res = await callBackend("ping");
+    backendConfigured = true;
+    cfgSay(res.dryRun ? "connected. dry run is on." : "connected. dry run is OFF.", res.dryRun ? "ok" : "bad");
+    render();
+  } catch (err) {
+    backendConfigured = false;
+    cfgSay(err.message || String(err), "bad");
+    render();
+  } finally {
+    els.cfgSave.disabled = false;
+  }
 }
 
 // ---------- boot ----------
 
 els.capture.addEventListener("click", capture);
+els.cfgSave.addEventListener("click", saveBackendForm);
+els.syncAll.addEventListener("click", syncAll);
 
-loadJobs().then(render);
+loadBackendForm().then(loadJobs).then(render);

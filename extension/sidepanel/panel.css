@@ -371,3 +371,132 @@ details[open] > .jd-summary::before {
     transition: none !important;
   }
 }
+
+/* ---------- backend setup drawer ---------- */
+
+.setup {
+  border-bottom: var(--line);
+}
+
+.setup-toggle {
+  padding: 10px var(--pad);
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  list-style: none;
+}
+
+.setup-toggle::-webkit-details-marker {
+  display: none;
+}
+
+.setup-toggle::before {
+  content: "+ ";
+  color: var(--ink);
+}
+
+.setup[open] > .setup-toggle::before {
+  content: "− ";
+}
+
+.setup-body {
+  padding: 0 var(--pad) 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.field input {
+  font: inherit;
+  font-size: 11px;
+  color: var(--ink);
+  background: transparent;
+  border: var(--line);
+  border-radius: 2px;
+  padding: 6px 8px;
+  text-transform: none;
+}
+
+.field input:focus {
+  outline: none;
+  border-color: var(--hot);
+}
+
+.setup-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.btn-ghost {
+  font: inherit;
+  font-size: 11px;
+  color: var(--ink);
+  background: transparent;
+  border: var(--line);
+  border-radius: 2px;
+  padding: 6px 10px;
+  cursor: pointer;
+  text-transform: lowercase;
+  transition: background var(--snap), color var(--snap);
+}
+
+.btn-ghost:hover {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.btn-ghost:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.cfg-state {
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.cfg-state[data-tone="bad"] {
+  color: var(--hot);
+}
+
+/* ---------- sync ---------- */
+
+.btn-link {
+  font: inherit;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: var(--hot);
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--hot);
+  padding: 0;
+  cursor: pointer;
+  text-transform: lowercase;
+}
+
+.btn-link:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.tag-sync[data-sync="synced"] {
+  color: var(--muted);
+  border-color: var(--muted);
+}
+
+.tag-sync[data-sync="pending"] {
+  border-color: var(--hot);
+  color: var(--hot);
+}
+
+.tag-sync:not([data-sync]) {
+  display: none;
+}

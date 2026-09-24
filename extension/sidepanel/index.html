@@ -12,6 +12,24 @@
       <p class="tagline">find your <em>plug</em>, get the referral.</p>
     </header>
 
+    <details class="setup" id="setup">
+      <summary class="setup-toggle">backend</summary>
+      <div class="setup-body">
+        <label class="field">
+          <span class="key">web app url</span>
+          <input id="cfg-url" type="url" spellcheck="false" placeholder="https://script.google.com/macros/s/…/exec" />
+        </label>
+        <label class="field">
+          <span class="key">token</span>
+          <input id="cfg-token" type="password" spellcheck="false" placeholder="from setUp()" />
+        </label>
+        <div class="setup-actions">
+          <button id="cfg-save" class="btn-ghost" type="button">save + test</button>
+          <span id="cfg-state" class="cfg-state"></span>
+        </div>
+      </div>
+    </details>
+
     <div class="act">
       <button id="capture" class="btn-primary" type="button">capture this job</button>
       <p id="status" class="status" role="status" aria-live="polite"></p>
@@ -22,7 +40,8 @@
     <footer class="footer">
       <span id="count">0 jobs</span>
       <span class="dot">·</span>
-      <span>day 1 — capture only</span>
+      <span id="sync-state">local only</span>
+      <button id="sync-all" class="btn-link" type="button" hidden>push</button>
     </footer>
 
     <!-- one job = one ticket. cloned per job, filled with textContent only. -->
@@ -68,11 +87,13 @@
         <div class="ticket-foot">
           <span class="tag tag-status">draft</span>
           <span class="tag tag-conf"></span>
+          <span class="tag tag-sync"></span>
           <a class="src-link" target="_blank" rel="noreferrer">open</a>
         </div>
       </article>
     </template>
 
+    <script src="api.js"></script>
     <script src="panel.js"></script>
   </body>
 </html>
