@@ -130,6 +130,7 @@ function draftReferral_(payload) {
     overLength: words > 120,
     provider: out.provider,
     model: out.model,
+    ms: out.ms,
     draftedAt: new Date().toISOString(),
   };
 }

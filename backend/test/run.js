@@ -102,6 +102,7 @@ const geminiOk = { candidates: [{ content: { parts: [{ text: '{"subject":"referr
   check("subject parsed", d.data.subject.startsWith("referral"));
   check("3 bullets", d.data.bullets.length === 3);
   check("word count computed", d.data.words === 6, d.data.words);
+  check("provider call is timed", typeof d.data.ms === "number" && d.data.ms >= 0, d.data.ms);
   const call = __fetchLog[0];
   check("gemini key goes in the query string", call.url.includes("key=test-key"));
   check("gemini gets systemInstruction", !!call.body.systemInstruction);

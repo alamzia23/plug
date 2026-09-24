@@ -154,7 +154,8 @@ function wireDraft(node, job) {
       list.append(ta);
     }
 
-    meta.textContent = `${d.words} words · ${d.provider}/${d.model}` + (d.overLength ? " · over 120, trim it" : "");
+    const took = d.ms ? ` · ${(d.ms / 1000).toFixed(1)}s` : "";
+    meta.textContent = `${d.words} words · ${d.provider}/${d.model}${took}` + (d.overLength ? " · over 120, trim it" : "");
     meta.dataset.over = String(Boolean(d.overLength));
   };
 

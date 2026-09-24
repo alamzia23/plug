@@ -138,6 +138,7 @@ function llmComplete_(opts) {
     json: Boolean(opts.json),
   };
 
+  var startedAt = Date.now();
   var res = UrlFetchApp.fetch(provider.url(model, key), {
     method: 'post',
     contentType: 'application/json',
@@ -162,7 +163,9 @@ function llmComplete_(opts) {
 
   var text = provider.text(data);
   if (!text) throw new Error(name + ' returned an empty completion');
-  return { text: text, provider: name, model: model };
+  // Time the provider call alone, so slow drafting can be blamed on the right
+  // thing — Apps Script cold start and its redirect cost a second or two too.
+  return { text: text, provider: name, model: model, ms: Date.now() - startedAt };
 }
 
 /** Providers disagree about where the message lives; try the common shapes. */
