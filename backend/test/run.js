@@ -8,17 +8,20 @@ const check = (name, cond, extra) => {
 const post = (body) => JSON.parse(doPost({ postData: { contents: JSON.stringify(body) } })._t);
 
 console.log("\nsetUp()");
+logged.length = 0;
 const cfg = setUp();
+const TOKEN_AFTER_SETUP = PropertiesService.getScriptProperties().getProperty("PLUG_TOKEN");
 check("returns a sheet id", !!cfg.sheetId);
-check("returns a token", typeof cfg.token === "string" && cfg.token.length > 20);
+check("confirms a token was made without returning it", cfg.tokenSet === true && cfg.token === undefined, cfg);
+check("token never reaches the execution log", !logged.some((l) => String(l).includes(PropertiesService.getScriptProperties().getProperty("PLUG_TOKEN"))), logged);
 check("all four tabs exist", ["jobs","contacts","outreach","settings"].every(t => !!ss_().getSheetByName(t)));
 check("Sheet1 removed", !ss_().getSheetByName("Sheet1"));
 check("DRY_RUN defaults on", getSetting_("DRY_RUN") === "true");
 const rerun = setUp();
-check("re-running keeps the same token", rerun.token === cfg.token);
+check("re-running keeps the same token", PropertiesService.getScriptProperties().getProperty("PLUG_TOKEN") === TOKEN_AFTER_SETUP);
 check("re-running keeps the same sheet", rerun.sheetId === cfg.sheetId);
 
-const TOKEN = cfg.token;
+const TOKEN = TOKEN_AFTER_SETUP;
 
 console.log("\nauth");
 check("no token rejected", post({ action: "ping" }).error === "bad token");

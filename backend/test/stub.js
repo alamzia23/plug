@@ -3,6 +3,11 @@
 // a deploy-and-squint cycle. No dependencies.
 const fs = require("fs");
 
+const logged = [];
+global.logged = logged;
+const origLog = console.log;
+console.log = (...a) => { logged.push(a.join(" ")); origLog(...a); };
+
 const props = new Map();
 global.PropertiesService = {
   getScriptProperties: () => ({

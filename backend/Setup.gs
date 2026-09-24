@@ -40,17 +40,35 @@ function setUp() {
   seed_('MAX_CONTACTS_PER_JOB', '3', '');
   seed_('MAX_FOLLOWUPS', '2', 'per contact, after the first email');
 
+  // The token is deliberately NOT logged. Execution logs get copied whole into
+  // chat, screenshots and bug reports, and this token is the only thing guarding
+  // a public endpoint. Read it from Project Settings > Script Properties instead.
   console.log('sheet:  https://docs.google.com/spreadsheets/d/' + sheetId);
-  console.log('token:  ' + token);
+  console.log('token:  stored in Project Settings > Script Properties > PLUG_TOKEN');
   console.log('next:   Deploy > New deployment > Web app, execute as me, access anyone');
-  return { sheetId: sheetId, token: token };
+  return { sheetId: sheetId, tokenSet: true };
+}
+
+/**
+ * Replace the shared token. Run this if it ever leaks — into a screenshot, a
+ * chat, a log you pasted somewhere. The old one stops working immediately, so
+ * re-paste the new one into the extension afterwards.
+ */
+function rotateToken() {
+  PropertiesService.getScriptProperties().setProperty(
+    'PLUG_TOKEN',
+    Utilities.getUuid().replace(/-/g, '')
+  );
+  console.log('done. new token is in Project Settings > Script Properties > PLUG_TOKEN');
+  console.log('the old token no longer works — update the extension.');
 }
 
 function seed_(key, value, notes) {
   if (getSetting_(key, '') === '') setSetting_(key, value, notes);
 }
 
-/** Prints the token again if you lose it. */
-function showToken() {
-  console.log(getProp_('PLUG_TOKEN') || 'not set — run setUp()');
+/** Confirms a token exists without printing it. */
+function checkToken() {
+  var t = getProp_('PLUG_TOKEN');
+  console.log(t ? 'token is set (' + t.length + ' chars). copy it from Script Properties.' : 'not set — run setUp()');
 }
