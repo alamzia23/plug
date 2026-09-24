@@ -1,0 +1,269 @@
+/* plug — same tokens as the extension panel: paper & ink, hard edges, one accent. */
+
+:root {
+  --paper: #f4f0e6;
+  --ink: #141414;
+  --muted: #6b665c;
+  --hot: #ff4f1f;
+
+  --line: 1px solid var(--ink);
+  --dash: 1px dashed var(--ink);
+
+  --font-display: "Instrument Serif", ui-serif, Georgia, serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --gutter: 16px;
+  --measure: 62ch;
+  --snap: 150ms cubic-bezier(0.2, 0, 0.2, 1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #141414;
+    --ink: #f4f0e6;
+    --muted: #97917f;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  line-height: 1.65;
+  text-transform: lowercase;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Proper nouns and prose keep their capitals. */
+.cap,
+article p,
+article li {
+  text-transform: none;
+}
+
+.wrap {
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 0 var(--gutter);
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  font-weight: 400;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+
+h1 {
+  font-size: clamp(38px, 9vw, 68px);
+}
+
+h2 {
+  font-size: clamp(26px, 5vw, 36px);
+}
+
+h3 {
+  font-size: 20px;
+}
+
+em {
+  font-style: italic;
+}
+
+a {
+  color: inherit;
+}
+
+p {
+  margin: 0 0 1em;
+  max-width: var(--measure);
+}
+
+/* ---------- header / footer ---------- */
+
+.site-head,
+.site-foot {
+  border-bottom: var(--line);
+}
+
+.site-foot {
+  border-bottom: 0;
+  border-top: var(--line);
+  margin-top: 64px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.bar {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  padding: 14px 0;
+  flex-wrap: wrap;
+}
+
+.brand {
+  font-family: var(--font-display);
+  font-size: 24px;
+  text-decoration: none;
+  margin-right: auto;
+}
+
+.bar nav {
+  display: flex;
+  gap: 16px;
+  font-size: 12px;
+}
+
+.bar nav a {
+  color: var(--muted);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: color var(--snap), border-color var(--snap);
+}
+
+.bar nav a:hover {
+  color: var(--ink);
+  border-bottom-color: var(--ink);
+}
+
+/* ---------- buttons ---------- */
+
+.btn {
+  display: inline-block;
+  padding: 13px 22px;
+  border: var(--line);
+  border-radius: 2px;
+  background: var(--hot);
+  color: var(--paper);
+  text-decoration: none;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  transition: transform var(--snap);
+}
+
+.btn:hover {
+  transform: translateY(-2px);
+}
+
+.btn-quiet {
+  background: transparent;
+  color: var(--ink);
+}
+
+/* ---------- ticket (same shape as the extension card) ---------- */
+
+.ticket {
+  border: var(--line);
+  border-radius: 2px;
+  padding: 18px;
+}
+
+.rows {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 12px;
+}
+
+.row {
+  display: flex;
+  gap: 10px;
+}
+
+.row .k {
+  width: 8ch;
+  flex: none;
+  color: var(--muted);
+}
+
+.perf {
+  border: 0;
+  border-top: var(--dash);
+  margin: 16px 0;
+}
+
+/* ---------- utility ---------- */
+
+.muted {
+  color: var(--muted);
+}
+
+.lede {
+  font-size: 17px;
+  max-width: 46ch;
+}
+
+.grid {
+  display: grid;
+  gap: 20px;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+}
+
+section {
+  padding: 56px 0;
+  border-top: var(--dash);
+}
+
+section:first-of-type {
+  border-top: 0;
+}
+
+.post-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.post-list li {
+  border-bottom: var(--dash);
+  padding: 16px 0;
+}
+
+.post-list a {
+  text-decoration: none;
+  font-family: var(--font-display);
+  font-size: 22px;
+}
+
+.post-list a:hover {
+  color: var(--hot);
+}
+
+time {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+article h2 {
+  margin: 40px 0 10px;
+}
+
+article h3 {
+  margin: 28px 0 8px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  * {
+    transition: none !important;
+  }
+}

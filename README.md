@@ -6,7 +6,7 @@ A personal referral agent: capture a job page, find the right people at that com
 draft a personal referral email + tailored resume, send it from your Gmail after you
 approve, and follow up automatically.
 
-Status: **day 2 — apps script backend + sheet.** Nothing sends mail yet; captured jobs
+Status: **day 2 done — apps script backend + sheet.** Landing site scaffolded in `site/`. Nothing sends mail yet; captured jobs
 sync to a Google Sheet you own.
 
 ## Load the extension
@@ -93,6 +93,29 @@ globals — auth, upsert-by-url, ordering, the 45k JD cap. Zero dependencies.
 
 JD text is whitespace-collapsed and capped at 8000 characters.
 
+## The site (`site/`)
+
+The public landing page and blog, built with **Astro 5** — static output, zero JS by
+default. SEO applies here and nowhere else in the project: a Chrome extension's pages
+live at `chrome-extension://…` and cannot be crawled.
+
+```sh
+cd site
+npm install
+npm run dev      # localhost:4321
+npm run build    # -> site/dist
+```
+
+**Before deploying, set `url` in `src/consts.ts`.** Canonical tags and the sitemap are
+built from it; it currently points at a placeholder domain.
+
+What's wired up: a unique title + hand-written meta description per page, canonical tags
+that match the sitemap exactly, `SoftwareApplication` / `BlogPosting` JSON-LD, OpenGraph
+with a 1200×630 image, `robots.txt`, `@astrojs/sitemap`, and `noindex` on the 404. Total
+JS shipped: one 4KB prefetch script.
+
+Deploy target is Cloudflare Pages or Netlify — build `npm run build`, publish `dist`.
+
 ## Layout
 
 ```
@@ -102,6 +125,7 @@ extension/
   content/capture.js     # site adapters, injected on demand
   sidepanel/             # index.html, panel.css, panel.js
   assets/                # icons
+site/                    # astro landing page + blog (the only crawlable surface)
 backend/
   appsscript.json        # web app manifest (execute as me, access anyone)
   Api.gs                 # doPost router + shared-token auth

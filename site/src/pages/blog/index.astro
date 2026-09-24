@@ -1,0 +1,29 @@
+---
+import { getCollection } from "astro:content";
+import Base from "../../layouts/Base.astro";
+
+const posts = (await getCollection("blog", ({ data }) => !data.draft)).sort(
+  (a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf()
+);
+---
+
+<Base
+  title="writing"
+  description="How to ask for a referral without being weird about it — templates, timing, and what actually gets a reply."
+>
+  <section>
+    <h1>writing</h1>
+    <p class="lede">how to ask strangers for things, and get a yes.</p>
+    <ul class="post-list" style="margin-top:32px">
+      {posts.map((post) => (
+        <li>
+          <a href={`/blog/${post.id}`}>{post.data.title}</a>
+          <p class="muted" style="font-size:13px;margin:6px 0 4px">{post.data.description}</p>
+          <time datetime={post.data.pubDate.toISOString()}>
+            {post.data.pubDate.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+          </time>
+        </li>
+      ))}
+    </ul>
+  </section>
+</Base>

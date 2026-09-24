@@ -1,0 +1,72 @@
+---
+import Base from "../layouts/Base.astro";
+import { SITE } from "../consts.ts";
+
+const steps = [
+  { n: "01", t: "capture", d: "open any job posting and hit capture. linkedin, naukri, greenhouse, lever, workday — it reads the page you're already looking at." },
+  { n: "02", t: "find your plug", d: "it ranks 2–3 people at that company who could actually refer you: recruiters, your function, alumni, second-degree." },
+  { n: "03", t: "draft", d: "a short email in your voice, tied to the actual job description, plus three resume bullets rewritten for the role." },
+  { n: "04", t: "send + nudge", d: "nothing goes out until you click send. no reply in three days? it sends one polite follow-up. then it stops." },
+];
+---
+
+<Base title="home" description={SITE.description}>
+  <section>
+    <h1>find your <em>plug</em>,<br />get the referral.</h1>
+    <p class="lede">
+      cold applications go to a pile. referrals go to a person. plug turns any job
+      posting into a referral email — written in your voice, sent from your gmail,
+      followed up automatically.
+    </p>
+    <p>
+      <a class="btn" href={SITE.storeUrl || SITE.repoUrl}>
+        {SITE.storeUrl ? "add to chrome — free" : "get the source"}
+      </a>
+    </p>
+    <p class="muted" style="font-size:12px">free. no account. your data stays in your google sheet.</p>
+  </section>
+
+  <section id="how">
+    <h2>four steps, one click each</h2>
+    <div class="grid" style="margin-top:28px">
+      {steps.map((s) => (
+        <div class="ticket">
+          <div class="muted" style="font-size:11px">{s.n}</div>
+          <h3 style="margin:6px 0 10px">{s.t}</h3>
+          <p style="font-size:13px;margin:0">{s.d}</p>
+        </div>
+      ))}
+    </div>
+  </section>
+
+  <section id="what">
+    <h2>what it looks like</h2>
+    <div class="ticket" style="margin-top:24px;max-width:460px">
+      <h3 class="cap" style="font-family:var(--font-display);font-size:22px">Senior Frontend Engineer</h3>
+      <div class="rows" style="margin-top:12px">
+        <div class="row"><span class="k">company</span><span class="cap">Ramp</span></div>
+        <div class="row"><span class="k">where</span><span>new york · remote</span></div>
+        <div class="row"><span class="k">via</span><span>greenhouse</span></div>
+        <div class="row"><span class="k">caught</span><span>2m ago</span></div>
+      </div>
+      <hr class="perf" />
+      <p class="muted" style="font-size:12px;margin:0">
+        found 3 people who could get you in · no reply yet. nudging them thursday.
+      </p>
+    </div>
+  </section>
+
+  <section id="privacy-note">
+    <h2>where your data actually lives</h2>
+    <p>
+      in your own google sheet, in your own drive. plug has no server and no database.
+      emails send from your gmail, so replies land in your inbox like any other
+      conversation — because that's what they are.
+    </p>
+    <p>
+      nothing sends without you clicking send. it never messages anyone on linkedin,
+      and it never connects on your behalf.
+    </p>
+    <p><a href="/privacy">read the privacy policy →</a></p>
+  </section>
+</Base>

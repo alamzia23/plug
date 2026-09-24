@@ -1,0 +1,15 @@
+---
+import { SITE } from "../consts.ts";
+const year = new Date().getFullYear();
+---
+
+<footer class="site-foot">
+  <div class="wrap bar">
+    <span>{SITE.name} · free, forever</span>
+    <nav>
+      <a href="/privacy">privacy</a>
+      <a href={SITE.repoUrl} rel="noopener">source</a>
+    </nav>
+    <span class="muted">© {year}</span>
+  </div>
+</footer>

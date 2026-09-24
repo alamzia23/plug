@@ -1,0 +1,12 @@
+---
+import { SITE, NAV } from "../consts.ts";
+---
+
+<header class="site-head">
+  <div class="wrap bar">
+    <a href="/" class="brand">{SITE.name}</a>
+    <nav>
+      {NAV.map((item) => <a href={item.href}>{item.label}</a>)}
+    </nav>
+  </div>
+</header>

@@ -1,0 +1,77 @@
+---
+// Everything that decides how a page looks to a crawler or a link preview.
+// Every page passes its own title + description; nothing falls back silently
+// to the site default, because duplicate meta is the fastest way to not rank.
+import { SITE } from "../consts.ts";
+
+interface Props {
+  title: string;
+  description: string;
+  /** "website" for pages, "article" for blog posts */
+  type?: "website" | "article";
+  published?: Date;
+  updated?: Date;
+  /** set true on thin or duplicate pages */
+  noindex?: boolean;
+}
+
+const { title, description, type = "website", published, updated, noindex = false } = Astro.props;
+
+// Keep the trailing slash: Astro emits directory-style urls and the sitemap uses
+// them, so stripping it here would make canonical and sitemap disagree.
+const canonical = new URL(Astro.url.pathname, SITE.url).href;
+const ogImage = new URL("/og.png", SITE.url).href;
+const fullTitle = Astro.url.pathname === "/" ? `${SITE.name} — ${SITE.tagline}` : `${title} · ${SITE.name}`;
+
+const schema =
+  type === "article"
+    ? {
+        "@context": "https://schema.org",
+        "@type": "BlogPosting",
+        headline: title,
+        description,
+        datePublished: published?.toISOString(),
+        dateModified: (updated ?? published)?.toISOString(),
+        mainEntityOfPage: canonical,
+        publisher: { "@type": "Organization", name: SITE.name, url: SITE.url },
+      }
+    : {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        name: SITE.name,
+        description: SITE.description,
+        applicationCategory: "BrowserApplication",
+        operatingSystem: "Chrome",
+        url: SITE.url,
+        offers: { "@type": "Offer", price: "0", priceCurrency: "INR" },
+      };
+---
+
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>{fullTitle}</title>
+<meta name="description" content={description} />
+<link rel="canonical" href={canonical} />
+{noindex && <meta name="robots" content="noindex, follow" />}
+
+<meta property="og:type" content={type} />
+<meta property="og:title" content={fullTitle} />
+<meta property="og:description" content={description} />
+<meta property="og:url" content={canonical} />
+<meta property="og:image" content={ogImage} />
+<meta property="og:site_name" content={SITE.name} />
+<meta property="og:locale" content={SITE.locale} />
+<meta name="twitter:card" content="summary_large_image" />
+
+<link rel="sitemap" href="/sitemap-index.xml" />
+<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+
+<!-- preconnect before the stylesheet so the font request starts one RTT earlier -->
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link
+  rel="stylesheet"
+  href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500&display=swap"
+/>
+
+<script type="application/ld+json" set:html={JSON.stringify(schema)} is:inline />
