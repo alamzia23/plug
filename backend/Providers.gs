@@ -66,7 +66,10 @@ var PROVIDERS = {
       // bare JSON and the parser has to tolerate a stray code fence.
       return {
         model: model,
-        max_tokens: o.maxTokens,
+        // Thinking is on by default on current models and its tokens count
+        // against max_tokens. A budget sized for the visible answer alone gets
+        // spent thinking and the JSON is cut off mid-string.
+        max_tokens: Math.max(o.maxTokens, 8000),
         system: o.system,
         messages: [{ role: 'user', content: o.user }],
       };
@@ -74,6 +77,9 @@ var PROVIDERS = {
     text: function (data) {
       if (data.stop_reason === 'refusal') {
         throw new Error('the model declined this request');
+      }
+      if (data.stop_reason === 'max_tokens') {
+        throw new Error('the reply was cut off at the token cap — raise max_tokens');
       }
       return (data.content || [])
         .filter(function (b) { return b.type === 'text'; })
@@ -106,6 +112,9 @@ var PROVIDERS = {
     text: function (data) {
       var c = data.choices && data.choices[0];
       if (!c) throw new Error('openai returned no choices');
+      if (c.finish_reason === 'length') {
+        throw new Error('the reply was cut off at the token cap — raise max_tokens');
+      }
       return (c.message && c.message.content) || '';
     },
   },

@@ -44,8 +44,15 @@ async function callBackend(action, payload = {}) {
   try {
     body = JSON.parse(text);
   } catch {
-    // Almost always Google's sign-in page: the deployment isn't set to "anyone".
-    throw new Error("backend returned a page, not json — redeploy with access: anyone");
+    // Show what actually came back. "It returned a page" is useless on its own —
+    // a sign-in page, an expired-content page and a quota page all look alike
+    // until you read the title.
+    const title = (text.match(/<title[^>]*>([^<]*)<\/title>/i) || [])[1] || "";
+    const detail = title.trim() || text.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 120);
+    console.warn("[plug] non-json response", { status: res.status, url: res.url, head: text.slice(0, 400) });
+    throw new Error(
+      "backend returned a page, not json (" + res.status + "): " + detail + " — see console for the full response"
+    );
   }
 
   if (!body.ok) throw new Error(body.error || "backend said no");

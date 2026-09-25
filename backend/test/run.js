@@ -123,7 +123,7 @@ const geminiOk = { candidates: [{ content: { parts: [{ text: '{"subject":"referr
   check("anthropic auth header", call.params.headers["x-api-key"] === "test-key");
   check("anthropic version header", call.params.headers["anthropic-version"] === "2023-06-01");
   check("anthropic system is top-level", typeof call.body.system === "string" && call.body.system.length > 0);
-  check("anthropic sends max_tokens", call.body.max_tokens === 1600);
+  check("anthropic budgets for thinking tokens too", call.body.max_tokens === 8000, call.body.max_tokens);
   check("no prefill assistant turn", call.body.messages.every((m) => m.role !== "assistant"));
 }
 
@@ -178,6 +178,27 @@ console.log("\nprovider failures");
 {
   const d = post({ action: "draftEmail", token: TOKEN, payload: { job: {}, contact: {} } });
   check("empty job rejected before any api call", /role or a company/.test(d.error), d.error);
+}
+
+console.log("\ntruncation");
+{
+  P.setProperty("LLM_PROVIDER", "anthropic");
+  __resetFetch();
+  __queueFetch({ body: { stop_reason: "max_tokens", content: [{ type: "text", text: '{"subject":"s","body":"hi pri' }] } });
+  const d = post({ action: "draftEmail", token: TOKEN, payload: { job: { role: "E" }, contact: {} } });
+  check("anthropic truncation names the cause", /cut off at the token cap/.test(d.error), d.error);
+
+  __resetFetch();
+  __queueFetch({ body: { content: [{ type: "text", text: '{"subject":"s","body":"b","bullets":[]}' }] } });
+  post({ action: "draftEmail", token: TOKEN, payload: { job: { role: "E" }, contact: {} } });
+  check("thinking gets budget headroom", __fetchLog[0].body.max_tokens >= 8000, __fetchLog[0].body.max_tokens);
+
+  P.setProperty("LLM_PROVIDER", "openai");
+  __resetFetch();
+  __queueFetch({ body: { choices: [{ finish_reason: "length", message: { content: '{"subject":"s","body":"cut' } }] } });
+  const o = post({ action: "draftEmail", token: TOKEN, payload: { job: { role: "E" }, contact: {} } });
+  check("openai truncation names the cause", /cut off at the token cap/.test(o.error), o.error);
+  P.setProperty("LLM_PROVIDER", "gemini");
 }
 
 console.log("\njson tolerance");

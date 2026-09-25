@@ -359,7 +359,10 @@
       source: adapter.name,
       capturedAt: new Date().toISOString(),
     };
-    job.confidence = job.company && job.role && job.jd ? "high" : "partial";
+    // A real posting has a real description. 40 words is well below any genuine
+    // JD and well above a board blurb, so it separates the two cleanly.
+    const jdWords = job.jd ? job.jd.trim().split(/\s+/).length : 0;
+    job.confidence = job.company && job.role && jdWords >= 40 ? "high" : "partial";
 
     return { ok: true, job };
   } catch (err) {
