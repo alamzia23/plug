@@ -104,7 +104,16 @@ global.UrlFetchApp = {
   },
 };
 
-for (const f of ["Sheet.gs", "Providers.gs", "Resume.gs", "Llm.gs", "Api.gs", "Setup.gs"]) {
+// Records every send instead of touching Gmail.
+const sent = [];
+global.__sent = sent;
+global.__resetSent = () => { sent.length = 0; };
+global.GmailApp = {
+  sendEmail: (to, subject, body, opts) => sent.push({ to, subject, body, opts }),
+  search: () => [{ getId: () => "thread-" + (sent.length || 0) }],
+};
+
+for (const f of ["Sheet.gs", "Providers.gs", "Resume.gs", "Llm.gs", "Mail.gs", "Api.gs", "Setup.gs"]) {
   (0, eval)(fs.readFileSync(require("path").join(__dirname, "..", f), "utf8"));
 }
 module.exports = { props, books };

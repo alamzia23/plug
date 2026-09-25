@@ -25,6 +25,12 @@ var ROUTES = {
   draftEmail: function (payload) {
     return draftReferral_(payload);
   },
+  sendEmail: function (payload) {
+    return sendReferral_(payload);
+  },
+  sendStatus: function () {
+    return sendStatus_();
+  },
   llmInfo: function () {
     var name = providerName_();
     var p = PROVIDERS[name];

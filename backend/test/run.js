@@ -231,5 +231,81 @@ console.log("\nllmInfo");
   check("reports key is set without leaking it", info.keySet === true && !JSON.stringify(info).includes("test-key"));
 }
 
+console.log("\nsending — dry run");
+const draft = { subject: "referral for the frontend role?", body: "Hi Priya, short and human." };
+const realContact = { name: "Priya", title: "EM", email: "priya@ramp.com" };
+{
+  __resetSent();
+  const r = post({ action: "sendEmail", token: TOKEN, payload: {
+    job: { id: "job-1", company: "Ramp" }, contact: realContact, ...draft } });
+  check("send succeeds", r.ok === true, r);
+  check("reports it was a dry run", r.data.dryRun === true);
+  check("went to TEST_INBOX, not the contact", __sent[0].to === getSetting_("TEST_INBOX"), __sent[0].to);
+  check("never reached the real address", __sent[0].to !== "priya@ramp.com");
+  check("real recipient is in the subject", __sent[0].subject.startsWith("[DRY RUN → priya@ramp.com] "), __sent[0].subject);
+  check("original subject preserved after the prefix", __sent[0].subject.endsWith(draft.subject));
+  check("body sent unchanged", __sent[0].body === draft.body);
+  check("sends plain text, not html", !__sent[0].opts.htmlBody);
+}
+
+console.log("\nsending — outreach log");
+{
+  const row = readAll_("outreach").slice(-1)[0];
+  check("logged to the outreach tab", !!row, row);
+  check("dry_run recorded as true", String(row.dry_run) === "true", row.dry_run);
+  check("real_to kept alongside the redirect", row.real_to === "priya@ramp.com", row.real_to);
+  check("to_email is where it actually went", row.to_email === getSetting_("TEST_INBOX"));
+  check("status sent", row.status === "sent");
+  check("thread id captured for day 6", !!row.thread_id, row.thread_id);
+  check("job id linked", row.job_id === "job-1");
+}
+
+console.log("\nsending — guards");
+{
+  const noDraft = post({ action: "sendEmail", token: TOKEN, payload: { job: {}, contact: realContact, subject: "", body: "" } });
+  check("refuses to send an empty draft", /draft the email first/.test(noDraft.error), noDraft.error);
+}
+{
+  // dry run tolerates a missing address; a live send must not
+  __resetSent();
+  const r = post({ action: "sendEmail", token: TOKEN, payload: { job: {}, contact: { name: "x" }, ...draft } });
+  check("dry run works without a recipient", r.ok === true, r);
+  check("subject says there's no recipient", /\[DRY RUN → no recipient\]/.test(__sent[0].subject), __sent[0].subject);
+
+  setSetting_("DRY_RUN", "false");
+  const live = post({ action: "sendEmail", token: TOKEN, payload: { job: {}, contact: { name: "x" }, ...draft } });
+  check("live send refuses a missing address", /no recipient address/.test(live.error), live.error);
+  const bad = post({ action: "sendEmail", token: TOKEN, payload: { job: {}, contact: { email: "not-an-email" }, ...draft } });
+  check("live send refuses a malformed address", /does not look like an email/.test(bad.error), bad.error);
+  const unver = post({ action: "sendEmail", token: TOKEN, payload: {
+    job: {}, contact: { email: "guess@ramp.com", email_status: "unverified" }, ...draft } });
+  check("live send refuses an unverified address", /unverified/.test(unver.error), unver.error);
+  const override = post({ action: "sendEmail", token: TOKEN, payload: {
+    job: {}, contact: { email: "guess@ramp.com", email_status: "unverified" }, overrideUnverified: true, ...draft } });
+  check("explicit override lets it through", override.ok === true, override);
+  check("a live send really does go to the contact", __sent.slice(-1)[0].to === "guess@ramp.com");
+  check("live subject has no dry-run prefix", !/DRY RUN/.test(__sent.slice(-1)[0].subject));
+  setSetting_("DRY_RUN", "true");
+}
+
+console.log("\nsending — daily cap");
+{
+  setSetting_("DAILY_CAP", "3");
+  const before = countSentToday_();
+  const sheet = tab_("outreach");
+  // top the day up to the cap
+  for (let i = before; i < 3; i++) {
+    sheet.appendRow(rowFor_(sheet, { id: "pad" + i, sent_at: new Date().toISOString(), status: "sent" }));
+  }
+  const capped = post({ action: "sendEmail", token: TOKEN, payload: { job: {}, contact: realContact, ...draft } });
+  check("cap blocks the send", /daily cap reached/.test(capped.error), capped.error);
+  check("cap error shows the numbers", /3\/3/.test(capped.error), capped.error);
+
+  const status = post({ action: "sendStatus", token: TOKEN, payload: {} }).data;
+  check("sendStatus reports nothing left", status.remaining === 0, status);
+  check("sendStatus reports dry run", status.dryRun === true);
+  setSetting_("DAILY_CAP", "25");
+}
+
 console.log(`\n${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);

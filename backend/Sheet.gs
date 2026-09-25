@@ -17,6 +17,8 @@ var SCHEMAS = {
   outreach: [
     'id', 'job_id', 'contact_id', 'to_email', 'subject',
     'thread_id', 'status', 'sent_at', 'followups', 'last_action_at',
+    // kept so a dry run is never mistaken for a real send when reading the sheet
+    'dry_run', 'real_to',
   ],
   settings: ['key', 'value', 'notes'],
 };

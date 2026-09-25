@@ -6,7 +6,8 @@ A personal referral agent: capture a job page, find the right people at that com
 draft a personal referral email + tailored resume, send it from your Gmail after you
 approve, and follow up automatically.
 
-Status: **day 3 done — drafting + review panel.** Nothing sends mail yet (day 4). Nothing sends mail yet; captured jobs
+Status: **day 4 done — sending, in dry run.** Every email goes to your test inbox until you
+turn `DRY_RUN` off yourself. Nothing sends mail yet; captured jobs
 sync to a Google Sheet you own.
 
 ## Load the extension
@@ -118,6 +119,40 @@ it, and a **regenerate** button. Edits are kept — regenerate is explicit.
 Model replies get parsed leniently (bare JSON, fenced JSON, or JSON with chatter around
 it), because every provider ignores "no markdown fence" eventually.
 
+## Sending (day 4)
+
+Everything funnels through one function, `sendReferral_()` in `Mail.gs`. There is no
+other path to Gmail, so `DRY_RUN` and the daily cap cannot be bypassed by a caller.
+
+**While `DRY_RUN` is `true`** (the default, seeded by `setUp()`): every message goes to
+`TEST_INBOX` and the real recipient is written into the subject —
+
+```
+[DRY RUN → priya@ramp.com] referral for the frontend role?
+```
+
+so a mistake lands in your own inbox, visibly, instead of on a stranger.
+
+**Guards.** A live send refuses a missing address, a malformed address, or one marked
+`unverified` unless you explicitly override. The daily cap (`DAILY_CAP`, default 25)
+counts dry runs too, because they spend the same Gmail quota.
+
+**The button says what it will do.** `send · dry run` next to a note naming your test
+inbox, or `send for real` in the accent colour with the actual recipient. A live send
+takes two clicks — one to arm, one to confirm, auto-disarming after six seconds. A dry
+run takes one, because the worst case is mail to yourself.
+
+Every send is logged to the `outreach` tab with both `to_email` (where it actually
+went) and `real_to` (where it would have gone), plus a `dry_run` column — so reading
+the Sheet can never leave you unsure whether something was a test.
+
+### The Gmail scope
+
+`appsscript.json` asks for `https://mail.google.com/`, which is **full mailbox access**.
+That's needed because `GmailApp` has to search sent mail to capture a thread id, which
+day 6 uses to detect replies. The narrower `script.send_mail` would send fine but makes
+reply detection — and therefore follow-ups — impossible.
+
 ## The site (`site/`)
 
 The public landing page and blog, built with **Astro 5** — static output, zero JS by
@@ -156,6 +191,7 @@ backend/
   Api.gs                 # doPost router + shared-token auth
   Sheet.gs               # the Sheet as a database
   Providers.gs           # gemini | anthropic | openai, behind one call
+  Mail.gs                # the only path to gmail: dry run, caps, outreach log
   Llm.gs                 # provider-neutral prompts + parsing
   Resume.gs              # dummy master resume
   Setup.gs               # setUp(): makes the sheet, token and defaults
@@ -176,8 +212,7 @@ Selectors were run against real postings, not guessed:
 
 ## Known gaps (day 1)
 
-- No email sending and no people finder. Days 4–7. The panel's **send** button is
-  present but disabled until day 4.
+- No email finder, reply detection or people finder. Days 5–7.
 - The contact is dummy data (`priya raman`), editable per card, until the people finder
   lands on day 7.
 - Drafts live in `chrome.storage.local`, not the Sheet. Day 4 logs sends to `outreach`.

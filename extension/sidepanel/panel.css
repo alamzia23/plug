@@ -568,3 +568,51 @@ details[open] > .jd-summary::before {
   width: auto;
   padding: 8px 14px;
 }
+
+/* ---------- send ---------- */
+
+.to-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.to-row input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-size: 11px;
+  color: var(--ink);
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--muted);
+  padding: 2px 0;
+  text-transform: none;
+}
+
+.to-row input:focus {
+  outline: none;
+  border-bottom-color: var(--hot);
+}
+
+.send-note {
+  font-size: 10px;
+  margin: 8px 0 0;
+}
+
+.send-note[data-tone="live"] {
+  color: var(--hot);
+}
+
+/* a real send needs a second, deliberate click */
+.d-send[data-armed="true"] {
+  background: transparent;
+  color: var(--hot);
+  border-color: var(--hot);
+}
+
+.tag-status[data-status="sent"] {
+  border-color: var(--muted);
+  color: var(--muted);
+}

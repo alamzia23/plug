@@ -135,11 +135,49 @@ function wireDraft(node, job) {
     });
   }
 
+  const toInput = node.querySelector(".d-to");
+  const sendNote = node.querySelector(".send-note");
+
+  toInput.value = (job.contact && job.contact.email) || "";
+  toInput.addEventListener("change", async () => {
+    const target = jobs.find((j) => j.id === job.id);
+    if (!target) return;
+    target.contact = { ...(target.contact || DUMMY_CONTACT), email: toInput.value.trim() };
+    await saveJobs();
+    paintSendState();
+  });
+
+  // The button has to say what it will actually do. "send" next to a live
+  // mailbox and "send" next to a dry run are not the same promise.
+  function paintSendState() {
+    if (job.sent) {
+      btnSend.textContent = "sent";
+      btnSend.disabled = true;
+      sendNote.textContent = job.sent.dryRun
+        ? `dry run · landed in ${job.sent.sentTo}`
+        : `sent to ${job.sent.sentTo}`;
+      sendNote.dataset.tone = "ok";
+      return;
+    }
+
+    const left = sendInfo.remaining === null ? "" : ` · ${sendInfo.remaining} left today`;
+    if (sendInfo.dryRun) {
+      btnSend.textContent = "send · dry run";
+      sendNote.textContent = `goes to ${sendInfo.testInbox || "your test inbox"}, not the real person${left}`;
+      sendNote.dataset.tone = "ok";
+    } else {
+      btnSend.textContent = "send for real";
+      sendNote.textContent = `DRY RUN IS OFF — this emails ${toInput.value.trim() || "the address above"}${left}`;
+      sendNote.dataset.tone = "live";
+    }
+  }
+
   const paint = (d) => {
     bodyBox.hidden = false;
     btnRegen.hidden = false;
     btnSend.hidden = false;
     btnDraft.hidden = true;
+    paintSendState();
 
     node.querySelector(".d-subject").value = d.subject;
     node.querySelector(".d-body").value = d.body;
@@ -188,6 +226,51 @@ function wireDraft(node, job) {
 
   btnDraft.addEventListener("click", () => run(btnDraft, "writing…"));
   btnRegen.addEventListener("click", () => run(btnRegen, "rewriting…"));
+
+  // A live send takes two clicks: one to arm, one to confirm. A dry run takes
+  // one, because the worst case is mail to your own inbox.
+  let armed = false;
+  const disarm = () => {
+    armed = false;
+    btnSend.dataset.armed = "false";
+    paintSendState();
+  };
+
+  btnSend.addEventListener("click", async () => {
+    const target = jobs.find((j) => j.id === job.id);
+    if (!target || !target.draft) return;
+
+    if (!sendInfo.dryRun && !armed) {
+      armed = true;
+      btnSend.dataset.armed = "true";
+      btnSend.textContent = "click again to send for real";
+      setTimeout(() => { if (armed) disarm(); }, 6000);
+      return;
+    }
+
+    btnSend.disabled = true;
+    btnSend.textContent = "sending…";
+    try {
+      const result = await callBackend("sendEmail", {
+        job: { id: target.remoteId || target.id, company: target.company, role: target.role },
+        contact: { ...(target.contact || DUMMY_CONTACT), email: toInput.value.trim() },
+        subject: target.draft.subject,
+        body: target.draft.body,
+      });
+      target.sent = result;
+      target.status = "sent";
+      node.querySelector(".tag-status").textContent = "sent";
+      node.querySelector(".tag-status").dataset.status = "sent";
+      await saveJobs();
+      sendInfo.remaining = Math.max(0, (sendInfo.remaining ?? 1) - 1);
+      paintSendState();
+      say(result.dryRun ? `dry run sent to ${result.sentTo}. check that inbox.` : `sent to ${result.sentTo}.`);
+    } catch (err) {
+      say("send failed: " + (err.message || err), "bad");
+      btnSend.disabled = false;
+      disarm();
+    }
+  });
 }
 
 // Edits are the point of the review step, so they're kept, not overwritten.
@@ -314,6 +397,8 @@ function renderSyncState() {
 // ---------- backend ----------
 
 let backendConfigured = false;
+// Cached from the backend so the send button can say what it will actually do.
+let sendInfo = { dryRun: true, testInbox: "", remaining: null, cap: null };
 
 // One request for the whole batch — Apps Script is slow to start and the daily
 // quota counts invocations, not rows.
@@ -390,6 +475,7 @@ async function saveBackendForm() {
     const res = await callBackend("ping");
     backendConfigured = true;
     cfgSay(res.dryRun ? "connected. dry run is on." : "connected. dry run is OFF.", res.dryRun ? "ok" : "bad");
+    await refreshSendInfo();
     render();
   } catch (err) {
     backendConfigured = false;
@@ -400,10 +486,25 @@ async function saveBackendForm() {
   }
 }
 
-// ---------- boot ----------
-
 els.capture.addEventListener("click", capture);
 els.cfgSave.addEventListener("click", saveBackendForm);
 els.syncAll.addEventListener("click", syncAll);
 
-loadBackendForm().then(loadJobs).then(render);
+async function refreshSendInfo() {
+  if (!backendConfigured) return;
+  try {
+    sendInfo = await callBackend("sendStatus");
+  } catch {
+    // A stale count is better than a dead panel; the send itself re-checks anyway.
+  }
+}
+
+// ---------- boot ----------
+
+(async () => {
+  await loadBackendForm();
+  await loadJobs();
+  render();
+  await refreshSendInfo();
+  render();
+})();
