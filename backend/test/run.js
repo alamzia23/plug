@@ -704,7 +704,7 @@ const crowd = [
   { name: "Ravi Menon", title: "Technical Recruiter at Acme", degree: "3rd" },
   { name: "Priya Raman", title: "Senior Frontend Engineer at Acme", degree: "2nd" },
   { name: "Sam Whitfield", title: "VP of Engineering at Acme", degree: "2nd" },
-  { name: "Asha Kapoor", title: "Frontend Engineer, " + MASTER_RESUME.education[0].aliases[0] + " alum", degree: "2nd" },
+  { name: "Test Alum", title: "Frontend Engineer, " + MASTER_RESUME.education[0].aliases[0] + " alum", degree: "2nd" },
   { name: "No Title Person", title: "", degree: "" },
 ];
 {
@@ -713,7 +713,7 @@ const crowd = [
   check("ranks people", r.ok === true, r.error);
   const names = r.data.top.map((p) => p.name);
   check("caps at MAX_CONTACTS_PER_JOB", r.data.top.length === 3, r.data.top.length);
-  check("alumni ranks first", names[0] === "Asha Kapoor", names);
+  check("alumni ranks first", names[0] === "Test Alum", names);
   check("same-function engineer beats the recruiter",
     names.indexOf("Priya Raman") < names.indexOf("Ravi Menon") || names.indexOf("Ravi Menon") === -1, names);
 
@@ -938,7 +938,7 @@ console.log("\npeople — connection note");
 {
   P.setProperty("LLM_PROVIDER", "gemini"); P.setProperty("LLM_API_KEY", "test-key");
   __resetFetch();
-  __queueFetch({ body: { candidates: [{ content: { parts: [{ text: '{"note":"Hi Priya, I am applying to the Senior Frontend Engineer role at Acme. I built the design system at Nutmeg Pay, which looks close to what your team owns. Would be glad to connect."}' }] } }] } });
+  __queueFetch({ body: { candidates: [{ content: { parts: [{ text: '{"note":"Hi Priya, I am applying to the Senior Frontend Engineer role at Acme. I run Kubernetes on EKS and OpenShift, which looks close to what your team owns. Would be glad to connect."}' }] } }] } });
   const r = post({ action: "connectionNote", token: TOKEN, payload: {
     person: { name: "Priya Raman", title: "Senior Frontend Engineer" },
     job: { role: "Senior Frontend Engineer", company: "Acme" } } });
