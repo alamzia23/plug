@@ -20,7 +20,10 @@ function sendReferral_(payload) {
   if (!subject || !body) throw new Error('nothing to send — draft the email first');
 
   var dryRun = getSetting_('DRY_RUN', 'true') === 'true';
-  var testInbox = getSetting_('TEST_INBOX', Session.getEffectiveUser().getEmail());
+  // Deliberately not passed as a default argument: JavaScript evaluates those
+  // eagerly, so Session.getEffectiveUser() would run on every send even when
+  // TEST_INBOX is set — dragging in a scope this function never actually needs.
+  var testInbox = getSetting_('TEST_INBOX', '') || Session.getEffectiveUser().getEmail();
   var cap = Number(getSetting_('DAILY_CAP', '25')) || 25;
 
   var realTo = String(contact.email || '').trim();
@@ -120,4 +123,24 @@ function sendStatus_() {
     cap: cap,
     remaining: Math.max(0, cap - sent),
   };
+}
+
+/**
+ * Run this once from the editor after the Gmail scope is added to the manifest.
+ *
+ * Declaring a scope doesn't grant it — Google only asks when you run something
+ * in the editor. The web app executes as you, so it can only use permissions
+ * you have already approved; without this it fails at the moment of sending,
+ * which is the worst possible time to find out.
+ *
+ * It only reads, and sends nothing.
+ */
+function checkGmailAccess() {
+  var address = Session.getEffectiveUser().getEmail(); // editor-run, so the scope is present
+  var threads = GmailApp.search('in:sent', 0, 1); // forces the Gmail grant
+  console.log('gmail access is granted for: ' + address);
+  console.log('sent threads visible: ' + threads.length);
+  console.log('dry-run mail will be delivered to: ' + (getSetting_('TEST_INBOX', '') || address));
+  console.log('you can now send from the extension.');
+  return true;
 }

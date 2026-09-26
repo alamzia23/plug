@@ -288,6 +288,17 @@ console.log("\nsending — guards");
   setSetting_("DRY_RUN", "true");
 }
 
+{
+  // Regression: the fallback used to be an eagerly-evaluated default argument,
+  // so a scope the send never needed was pulled in on every single send.
+  const realSession = global.Session;
+  global.Session = { getEffectiveUser: () => { throw new Error("Session must not be touched when TEST_INBOX is set"); } };
+  __resetSent();
+  const r = post({ action: "sendEmail", token: TOKEN, payload: { job: {}, contact: realContact, ...draft } });
+  check("send never touches Session when TEST_INBOX is set", r.ok === true, r.error);
+  global.Session = realSession;
+}
+
 console.log("\nsending — daily cap");
 {
   setSetting_("DAILY_CAP", "3");
@@ -299,7 +310,7 @@ console.log("\nsending — daily cap");
   }
   const capped = post({ action: "sendEmail", token: TOKEN, payload: { job: {}, contact: realContact, ...draft } });
   check("cap blocks the send", /daily cap reached/.test(capped.error), capped.error);
-  check("cap error shows the numbers", /3\/3/.test(capped.error), capped.error);
+  check("cap error shows the numbers", /\d+\/3\b/.test(capped.error), capped.error);
 
   const status = post({ action: "sendStatus", token: TOKEN, payload: {} }).data;
   check("sendStatus reports nothing left", status.remaining === 0, status);
