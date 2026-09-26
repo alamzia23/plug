@@ -616,3 +616,54 @@ details[open] > .jd-summary::before {
   border-color: var(--muted);
   color: var(--muted);
 }
+
+/* ---------- email finder ---------- */
+
+.find-note {
+  font-size: 10px;
+  margin: 6px 0 0;
+}
+
+.find-note[data-status="verified"] {
+  color: var(--ink);
+}
+
+.find-note[data-status="unverified"],
+.find-note[data-status="invalid"] {
+  color: var(--hot);
+}
+
+.guesses {
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.guess {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font: inherit;
+  font-size: 11px;
+  color: var(--muted);
+  background: none;
+  border: 0;
+  border-bottom: 1px dashed transparent;
+  padding: 2px 0;
+  cursor: pointer;
+  text-align: left;
+  text-transform: none;
+}
+
+.guess:hover {
+  color: var(--ink);
+  border-bottom-color: var(--ink);
+}
+
+.guess .shape {
+  font-size: 9px;
+  color: var(--muted);
+  margin-left: auto;
+  text-transform: lowercase;
+}

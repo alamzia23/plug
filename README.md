@@ -6,7 +6,7 @@ A personal referral agent: capture a job page, find the right people at that com
 draft a personal referral email + tailored resume, send it from your Gmail after you
 approve, and follow up automatically.
 
-Status: **day 4 done — sending, in dry run.** Every email goes to your test inbox until you
+Status: **day 5 done — email finder.** Every email goes to your test inbox until you
 turn `DRY_RUN` off yourself. Nothing sends mail yet; captured jobs
 sync to a Google Sheet you own.
 
@@ -153,6 +153,30 @@ That's needed because `GmailApp` has to search sent mail to capture a thread id,
 day 6 uses to detect replies. The narrower `script.send_mail` would send fine but makes
 reply detection — and therefore follow-ups — impossible.
 
+## Finding an address (day 5)
+
+`EmailFinder.gs` guesses, and the code is honest that it's guessing.
+
+**Domain.** If the posting is on the employer's own site, the domain comes from the url
+(`careers.acme.com` → `acme.com`). If it's on an ATS — greenhouse, lever, linkedin,
+naukri and a dozen others are recognised — the url tells you nothing, so it slugs the
+company name (`Acme Technologies Pvt Ltd` → `acme`) and probes `.com`, `.io`, `.co`,
+`.ai`, stopping at the first that answers. Capped at four probes.
+
+**Patterns**, most common first: `first.last`, `first`, `firstlast`, `f.last`, `flast`,
+`first_last`. Titles (`Dr.`) and suffixes (`PhD`) are stripped, since neither appears in
+an address.
+
+**Verification** uses Hunter's free tier if `HUNTER_API_KEY` is in Script Properties.
+Only the top candidate is checked — the free tier is ~25/month and six checks per
+person would empty it in four contacts. Anything that isn't a clear `valid` stays
+`unverified`; `accept_all` is not a yes. With no key configured, everything is
+`unverified`, which is honest rather than broken.
+
+**The gate.** `Mail.gs` refuses to send to an `unverified` address on a live send
+without an explicit override. Typing an address by hand counts as vouching for it.
+A confident wrong address is worse than none: it bounces, or it reaches a stranger.
+
 ## The site (`site/`)
 
 The public landing page and blog, built with **Astro 5** — static output, zero JS by
@@ -192,6 +216,7 @@ backend/
   Sheet.gs               # the Sheet as a database
   Providers.gs           # gemini | anthropic | openai, behind one call
   Mail.gs                # the only path to gmail: dry run, caps, outreach log
+  EmailFinder.gs         # domain + pattern guessing, optional verification
   Llm.gs                 # provider-neutral prompts + parsing
   Resume.gs              # dummy master resume
   Setup.gs               # setUp(): makes the sheet, token and defaults
@@ -212,7 +237,7 @@ Selectors were run against real postings, not guessed:
 
 ## Known gaps (day 1)
 
-- No email finder, reply detection or people finder. Days 5–7.
+- No reply detection or people finder. Days 6–7.
 - The contact is dummy data (`priya raman`), editable per card, until the people finder
   lands on day 7.
 - Drafts live in `chrome.storage.local`, not the Sheet. Day 4 logs sends to `outreach`.

@@ -137,12 +137,92 @@ function wireDraft(node, job) {
 
   const toInput = node.querySelector(".d-to");
   const sendNote = node.querySelector(".send-note");
+  const btnFind = node.querySelector(".d-find");
+  const findNote = node.querySelector(".find-note");
+  const guesses = node.querySelector(".guesses");
+
+  // A guessed address carries its status all the way to the send, where an
+  // unverified one is refused. Typing one by hand is treated as deliberate.
+  const setAddress = (email, status) => {
+    toInput.value = email;
+    const target = jobs.find((j) => j.id === job.id);
+    if (target) {
+      target.contact = { ...(target.contact || DUMMY_CONTACT), email, email_status: status };
+      saveJobs();
+    }
+    findNote.dataset.status = status;
+    findNote.textContent =
+      status === "verified"
+        ? "verified. safe to send."
+        : status === "invalid"
+        ? "the verifier says this address is bad."
+        : "a guess, not checked. it won't go out on a live send unless you say so.";
+    paintSendState();
+  };
+
+  btnFind.addEventListener("click", async () => {
+    const target = jobs.find((j) => j.id === job.id);
+    if (!target) return;
+    const who = (target.contact && target.contact.name) || "";
+    if (!who) {
+      findNote.textContent = "put a name in the 'to' field first.";
+      findNote.dataset.status = "invalid";
+      return;
+    }
+
+    btnFind.disabled = true;
+    btnFind.textContent = "looking…";
+    guesses.hidden = true;
+    findNote.dataset.status = "";
+    findNote.textContent = "";
+
+    try {
+      const res = await callBackend("findEmail", {
+        name: who,
+        company: target.company,
+        jobUrl: target.url,
+      });
+
+      setAddress(res.best.email, res.best.status);
+
+      // Show the alternatives: the top pattern is the most common, not the
+      // most likely for any particular company.
+      guesses.replaceChildren();
+      for (const c of res.candidates.slice(1)) {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "guess";
+        const addr = document.createElement("span");
+        addr.textContent = c.email;
+        const shape = document.createElement("span");
+        shape.className = "shape";
+        shape.textContent = c.pattern;
+        b.append(addr, shape);
+        b.addEventListener("click", () => setAddress(c.email, "unverified"));
+        guesses.append(b);
+      }
+      guesses.hidden = res.candidates.length < 2;
+
+      const src = res.domainSource === "guessed" ? " (domain guessed)" : "";
+      say(`${res.domain}${src} · ${res.candidates.length} possible addresses.`);
+    } catch (err) {
+      findNote.dataset.status = "invalid";
+      findNote.textContent = err.message || String(err);
+    } finally {
+      btnFind.disabled = false;
+      btnFind.textContent = "find";
+    }
+  });
 
   toInput.value = (job.contact && job.contact.email) || "";
   toInput.addEventListener("change", async () => {
     const target = jobs.find((j) => j.id === job.id);
     if (!target) return;
-    target.contact = { ...(target.contact || DUMMY_CONTACT), email: toInput.value.trim() };
+    target.contact = {
+      ...(target.contact || DUMMY_CONTACT),
+      email: toInput.value.trim(),
+      email_status: "typed", // typing it yourself is the override
+    };
     await saveJobs();
     paintSendState();
   });
@@ -254,6 +334,7 @@ function wireDraft(node, job) {
       const result = await callBackend("sendEmail", {
         job: { id: target.remoteId || target.id, company: target.company, role: target.role },
         contact: { ...(target.contact || DUMMY_CONTACT), email: toInput.value.trim() },
+        overrideUnverified: false,
         subject: target.draft.subject,
         body: target.draft.body,
       });

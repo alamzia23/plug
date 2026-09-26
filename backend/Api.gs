@@ -31,6 +31,9 @@ var ROUTES = {
   sendStatus: function () {
     return sendStatus_();
   },
+  findEmail: function (payload) {
+    return findEmail_(payload);
+  },
   llmInfo: function () {
     var name = providerName_();
     var p = PROVIDERS[name];

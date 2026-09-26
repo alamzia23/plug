@@ -113,7 +113,7 @@ global.GmailApp = {
   search: () => [{ getId: () => "thread-" + (sent.length || 0) }],
 };
 
-for (const f of ["Sheet.gs", "Providers.gs", "Resume.gs", "Llm.gs", "Mail.gs", "Api.gs", "Setup.gs"]) {
+for (const f of ["Sheet.gs", "Providers.gs", "Resume.gs", "Llm.gs", "Mail.gs", "EmailFinder.gs", "Api.gs", "Setup.gs"]) {
   (0, eval)(fs.readFileSync(require("path").join(__dirname, "..", f), "utf8"));
 }
 module.exports = { props, books };

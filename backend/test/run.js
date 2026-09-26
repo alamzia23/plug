@@ -318,5 +318,94 @@ console.log("\nsending — daily cap");
   setSetting_("DAILY_CAP", "25");
 }
 
+console.log("\nemail finder — domain");
+check("company slug strips legal noise", companySlug_("Acme Technologies Pvt Ltd") === "acme", companySlug_("Acme Technologies Pvt Ltd"));
+check("slug handles ampersands", companySlug_("Ben & Jerry's") === "benandjerrys", companySlug_("Ben & Jerry's"));
+check("ats host is not the employer", domainFromJobUrl_("https://job-boards.greenhouse.io/anthropic/jobs/1") === "");
+check("linkedin is not the employer", domainFromJobUrl_("https://www.linkedin.com/jobs/view/123") === "");
+check("employer's own careers page resolves", domainFromJobUrl_("https://careers.acme.com/jobs/7") === "acme.com");
+check("plain employer host kept", domainFromJobUrl_("https://acme.com/jobs/7") === "acme.com");
+check("www stripped", domainFromJobUrl_("https://www.acme.co.uk/jobs/7") === "acme.co.uk");
+
+console.log("\nemail finder — patterns");
+{
+  const p = patternsFor_("Priya Raman", "acme.com");
+  check("first.last ranked first", p[0].email === "priya.raman@acme.com", p[0]);
+  check("six shapes generated", p.length === 6, p.length);
+  check("f.last included", p.some((c) => c.email === "p.raman@acme.com"));
+  check("firstlast included", p.some((c) => c.email === "priyaraman@acme.com"));
+  const single = patternsFor_("Madonna", "acme.com");
+  check("one-word name yields only first", single.length === 1 && single[0].email === "madonna@acme.com", single);
+  const messy = patternsFor_("  Dr. Priya   RAMAN ", "acme.com");
+  check("titles and case cleaned up", messy[0].email === "priya.raman@acme.com", messy[0].email);
+  check("suffixes dropped too", patternsFor_("Priya Raman PhD", "acme.com")[0].email === "priya.raman@acme.com",
+    patternsFor_("Priya Raman PhD", "acme.com")[0].email);
+  check("hyphenated surnames survive", patternsFor_("Priya Raman-Iyer", "acme.com")[0].email === "priya.ramaniyer@acme.com",
+    patternsFor_("Priya Raman-Iyer", "acme.com")[0].email);
+  check("no name yields nothing", patternsFor_("", "acme.com").length === 0);
+  check("no domain yields nothing", patternsFor_("Priya Raman", "").length === 0);
+}
+
+console.log("\nemail finder — statuses");
+{
+  P.setProperty("HUNTER_API_KEY", "");
+  __resetFetch();
+  const r = post({ action: "findEmail", token: TOKEN, payload: {
+    name: "Priya Raman", company: "Acme", jobUrl: "https://careers.acme.com/jobs/7" } });
+  check("finds candidates", r.ok === true, r.error);
+  check("uses the employer domain from the url", r.data.domain === "acme.com", r.data.domain);
+  check("says where the domain came from", r.data.domainSource === "job url");
+  check("no verifier means unverified, not verified", r.data.best.status === "unverified", r.data.best);
+  check("says why it is unverified", /no verifier/.test(r.data.best.reason), r.data.best.reason);
+  check("reports the verifier is absent", r.data.verifierConfigured === false);
+  check("every candidate carries a status", r.data.candidates.every((c) => !!c.status));
+}
+{
+  P.setProperty("HUNTER_API_KEY", "hk");
+  __resetFetch();
+  __queueFetch({ body: { data: { status: "valid" } } });
+  const r = post({ action: "findEmail", token: TOKEN, payload: {
+    name: "Priya Raman", company: "Acme", domain: "acme.com" } });
+  check("a valid verdict verifies the top guess", r.data.best.status === "verified", r.data.best);
+  check("only the top candidate is checked", __fetchLog.length === 1, __fetchLog.length);
+  check("the rest stay unverified", r.data.candidates.slice(1).every((c) => c.status === "unverified"));
+  check("typed domain is used as-is", r.data.domainSource === "you typed it");
+}
+{
+  __resetFetch();
+  __queueFetch({ body: { data: { status: "invalid" } } });
+  const r = post({ action: "findEmail", token: TOKEN, payload: { name: "Priya Raman", domain: "acme.com" } });
+  check("an invalid verdict is reported as invalid", r.data.best.status === "invalid", r.data.best);
+}
+{
+  // "accept_all" and friends must never be treated as a yes
+  __resetFetch();
+  __queueFetch({ body: { data: { status: "accept_all" } } });
+  const r = post({ action: "findEmail", token: TOKEN, payload: { name: "Priya Raman", domain: "acme.com" } });
+  check("a maybe is not upgraded to verified", r.data.best.status === "unverified", r.data.best);
+}
+{
+  __resetFetch();
+  __queueFetch({ code: 401, body: { errors: [{ details: "bad key" }] } });
+  const r = post({ action: "findEmail", token: TOKEN, payload: { name: "Priya Raman", domain: "acme.com" } });
+  check("a broken verifier downgrades rather than throws", r.ok === true && r.data.best.status === "unverified", r.data.best);
+  P.setProperty("HUNTER_API_KEY", "");
+}
+{
+  const noName = post({ action: "findEmail", token: TOKEN, payload: { company: "Acme" } });
+  check("refuses without a name", /need a contact name/.test(noName.error), noName.error);
+}
+
+console.log("\nemail finder — the send gate");
+{
+  // the whole point of the status: an unverified guess must not go out silently
+  setSetting_("DRY_RUN", "false");
+  const blocked = post({ action: "sendEmail", token: TOKEN, payload: {
+    job: {}, contact: { email: "priya.raman@acme.com", email_status: "unverified" },
+    subject: "s", body: "b" } });
+  check("a guessed address is blocked on a live send", /unverified/.test(blocked.error), blocked.error);
+  setSetting_("DRY_RUN", "true");
+}
+
 console.log(`\n${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);
