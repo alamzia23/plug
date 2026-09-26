@@ -39,7 +39,33 @@
     return "";
   };
 
+  // Search boxes, filters and nav are full of words like "location" — and on a
+  // careers site they sit right next to the posting. Anything inside page
+  // furniture is chrome, not content.
+  const isChrome = (el) =>
+    Boolean(el.closest("form, label, nav, header, footer, select, [role='search'], [role='navigation']"));
+
+  const CHROME_WORDS = /\b(search|select|filter|sort|choose|keyword|all locations|apply now)\b/i;
+
   // Same, but for long text. Short matches are stub containers, so skip them.
+  // Like pick(), but refuses page furniture.
+  const pickClean = (selectors) => {
+    for (const sel of selectors) {
+      let els;
+      try {
+        els = document.querySelectorAll(sel);
+      } catch {
+        continue;
+      }
+      for (const el of els) {
+        if (isChrome(el)) continue;
+        const v = clean(el.innerText || el.textContent);
+        if (v && v.length < 120 && !CHROME_WORDS.test(v)) return v;
+      }
+    }
+    return "";
+  };
+
   const pickBlock = (selectors) => {
     for (const sel of selectors) {
       let els;
@@ -327,7 +353,7 @@
         return {
           role: clean(role),
           company: clean(company) || companyFromUrl(),
-          location: meta("og:locality") || pick(['[class*="location"]', '[id*="location"]']),
+          location: meta("og:locality") || pickClean(['[class*="location"]', '[id*="location"]']),
           jd: pickBlock([
             '[class*="job-description"]',
             '[id*="job-description"]',

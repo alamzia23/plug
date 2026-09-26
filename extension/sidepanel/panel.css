@@ -31,6 +31,13 @@
   box-sizing: border-box;
 }
 
+/* `display` on a class beats the browser's [hidden] rule, so any component
+   styled with display:flex ignores its own hidden attribute. Restore it once,
+   globally, rather than remembering per component. */
+[hidden] {
+  display: none !important;
+}
+
 html,
 body {
   margin: 0;
