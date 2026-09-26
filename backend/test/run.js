@@ -216,10 +216,15 @@ console.log("\nprompt content");
   const body = __fetchLog[0].body;
   const user = body.contents[0].parts[0].text;
   const system = body.systemInstruction.parts[0].text;
-  check("jd truncated into the prompt", user.length < 8000, user.length);
+  // The cap is on the jd, not the whole prompt — a longer resume shouldn't
+  // look like a truncation failure.
+  // Longest run of x, not every x — "Linux" and "an LLM platform" are in the resume.
+  const jdRun = Math.max.apply(null, user.split(/[^x]+/).map((r) => r.length));
+  check("jd truncated into the prompt", jdRun === 6000, jdRun);
   check("contact name in prompt", user.includes("Priya"));
   check("resume name in prompt", user.includes(MASTER_RESUME.name));
-  check("resume bullets in prompt", user.includes("design system"));
+  check("resume bullets in prompt", user.includes(MASTER_RESUME.experience[0].bullets[0].slice(0, 30)));
+  check("side projects offered to the model", user.includes(MASTER_RESUME.projects[0].name));
   check("word limit stated", /UNDER 120 words/.test(system));
   check("buzzwords banned", /synergy/.test(system));
 }
@@ -699,7 +704,7 @@ const crowd = [
   { name: "Ravi Menon", title: "Technical Recruiter at Acme", degree: "3rd" },
   { name: "Priya Raman", title: "Senior Frontend Engineer at Acme", degree: "2nd" },
   { name: "Sam Whitfield", title: "VP of Engineering at Acme", degree: "2nd" },
-  { name: "Asha Kapoor", title: "Frontend Engineer, NIT Trichy alum", degree: "2nd" },
+  { name: "Asha Kapoor", title: "Frontend Engineer, " + MASTER_RESUME.education[0].aliases[0] + " alum", degree: "2nd" },
   { name: "No Title Person", title: "", degree: "" },
 ];
 {
@@ -776,6 +781,24 @@ const crowd = [
 {
   const empty = post({ action: "rankPeople", token: TOKEN, payload: { people: [], job: {} } });
   check("refuses an empty list", /no people to rank/.test(empty.error), empty.error);
+}
+
+{
+  // the alumni signal has to fire on how people actually write their school
+  const full = post({ action: "rankPeople", token: TOKEN, payload: {
+    people: [{ name: "A", title: "SRE · " + MASTER_RESUME.education[0].school }],
+    job: { role: "DevOps Engineer" } } }).data.top[0];
+  check("the full school name matches", full.reasons.indexOf("alumni") !== -1, full.reasons);
+
+  const alias = post({ action: "rankPeople", token: TOKEN, payload: {
+    people: [{ name: "B", title: "Platform Engineer, EIT alum" }],
+    job: { role: "DevOps Engineer" } } }).data.top[0];
+  check("an abbreviation matches too", alias.reasons.indexOf("alumni") !== -1, alias.reasons);
+
+  const stranger = post({ action: "rankPeople", token: TOKEN, payload: {
+    people: [{ name: "C", title: "Platform Engineer, IIT Delhi" }],
+    job: { role: "DevOps Engineer" } } }).data.top[0];
+  check("a different school does not", stranger.reasons.indexOf("alumni") === -1, stranger.reasons);
 }
 
 console.log("\npeople — directory search");

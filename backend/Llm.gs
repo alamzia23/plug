@@ -58,7 +58,16 @@ function buildDraftPrompt_(job, contact, resume) {
           .join('\n');
       })
       .join('\n'),
-  ].join('\n');
+    '',
+    // A hackathon win can be more distinctive than a job bullet, especially to
+    // a startup. Offered, not forced — the model picks whichever fits the job.
+    (resume.projects || []).length ? 'things i built outside work:' : '',
+    (resume.projects || [])
+      .map(function (pr) {
+        return '- ' + pr.name + ': ' + pr.what + (pr.result ? ' (' + pr.result + ')' : '');
+      })
+      .join('\n'),
+  ].filter(function (line) { return line !== ''; }).join('\n');
 }
 
 /**

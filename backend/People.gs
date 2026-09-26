@@ -63,12 +63,18 @@ function scorePerson_(person, job, resume) {
   var reasons = [];
   var score = 0;
 
-  // A shared school is the strongest opener a stranger can have.
-  var schools = (resume.education || []).map(function (e) {
-    return String(e.school || '').toLowerCase();
-  }).filter(Boolean);
+  // A shared school is the strongest opener a stranger can have — but a
+  // headline says "EIT", not "Example Institute of Technology",
+  // so the full name alone almost never matches. Aliases are how this fires.
+  var schools = [];
+  (resume.education || []).forEach(function (e) {
+    [].concat(e.school || [], e.aliases || []).forEach(function (name) {
+      var n = String(name || '').toLowerCase().trim();
+      if (n.length > 2) schools.push(n);
+    });
+  });
   var alumni = schools.some(function (s) {
-    return s && title.indexOf(s) !== -1;
+    return title.indexOf(s) !== -1;
   });
   if (alumni) {
     score += 50;
