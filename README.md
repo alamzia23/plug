@@ -251,6 +251,15 @@ isn't installed.
 
 ## Finding the right person (day 7)
 
+**With Hunter configured it finds people on its own.** `findPeople` resolves the
+company's domain and asks Hunter's Domain Search who works there — names, titles and
+addresses, no page to open and no LinkedIn involved. One search credit per *company*,
+not per person, so a company with twenty engineers costs the same as one with two.
+Addresses come back attached, so the `find` step is already done.
+
+When there's no key, nobody listed, or the quota is spent, it falls back to reading
+whatever page you have open:
+
 `content/people.js` reads whoever is already visible on the page — a LinkedIn people
 search, a LinkedIn job page's "people you can reach out to", or a Google
 `site:linkedin.com/in` search. It is anchored on `/in/` profile links rather than class

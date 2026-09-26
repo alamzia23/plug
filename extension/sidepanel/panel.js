@@ -184,16 +184,25 @@ function wireDraft(node, job) {
       name: p.name,
       title: p.title,
       profileUrl: p.profileUrl,
-      // a new person means the old address is meaningless
-      email: "",
-      email_status: "",
+      // the directory already knows the address; a page-read person doesn't,
+      // and their predecessor's address would be worse than none
+      email: p.email || "",
+      email_status: p.email_status || "",
     };
     await saveJobs();
     node.querySelector('[data-contact="name"]').value = p.name;
     node.querySelector('[data-contact="title"]').value = p.title;
-    toInput.value = "";
-    findNote.textContent = "";
-    findNote.dataset.status = "";
+    toInput.value = p.email || "";
+    if (p.email) {
+      findNote.dataset.status = p.email_status;
+      findNote.textContent =
+        p.email_status === "verified"
+          ? `from the directory, ${p.confidence}% confidence. safe to send.`
+          : `from the directory, ${p.confidence}% confidence — still a guess.`;
+    } else {
+      findNote.textContent = "";
+      findNote.dataset.status = "";
+    }
     guesses.hidden = true;
     peopleList.hidden = true;
 
@@ -227,36 +236,9 @@ function wireDraft(node, job) {
     }
   });
 
-  btnPeople.addEventListener("click", async () => {
-    const target = jobs.find((j) => j.id === job.id);
-    if (!target) return;
-
-    btnPeople.disabled = true;
-    btnPeople.textContent = "reading…";
-    peopleList.hidden = true;
-    peopleNote.dataset.tone = "ok";
-    peopleNote.textContent = "";
-
-    try {
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      if (!tab || !/^https?:/.test(tab.url || "")) {
-        throw new Error("open a linkedin people search or a google search first");
-      }
-
-      const [frame] = await chrome.scripting.executeScript({
-        target: { tabId: tab.id },
-        files: ["content/people.js"],
-      });
-      const res = frame && frame.result;
-      if (!res || !res.ok) throw new Error((res && res.error) || "couldn't read that page");
-
-      const ranked = await callBackend("rankPeople", {
-        people: res.people,
-        job: { role: target.role, company: target.company },
-      });
-
-      peopleList.replaceChildren();
-      for (const p of ranked.top) {
+  const showPeople = (list) => {
+    peopleList.replaceChildren();
+    for (const p of list) {
         const b = document.createElement("button");
         b.type = "button";
         b.className = "person";
@@ -275,15 +257,71 @@ function wireDraft(node, job) {
         why.className = "why";
         why.textContent = p.reasons.length ? p.reasons.join(" · ") : "no strong signal";
 
-        b.append(who, why);
-        b.addEventListener("click", () => pickPerson(p));
-        peopleList.append(b);
+      b.append(who, why);
+      b.addEventListener("click", () => pickPerson(p));
+      peopleList.append(b);
+    }
+    peopleList.hidden = list.length === 0;
+  };
+
+  // Ask the directory first — it needs no navigation and comes back with
+  // addresses attached. Reading the open tab is the fallback, not the plan.
+  const readOpenTab = async (target) => {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab || !/^https?:/.test(tab.url || "")) {
+      throw new Error("open a linkedin people search or a google search first");
+    }
+    const [frame] = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      files: ["content/people.js"],
+    });
+    const res = frame && frame.result;
+    if (!res || !res.ok) throw new Error((res && res.error) || "couldn't read that page");
+
+    const ranked = await callBackend("rankPeople", {
+      people: res.people,
+      job: { role: target.role, company: target.company },
+    });
+    showPeople(ranked.top);
+    peopleNote.textContent = `read ${res.people.length} profiles on that page. best ${ranked.top.length}:`;
+  };
+
+  btnPeople.addEventListener("click", async () => {
+    const target = jobs.find((j) => j.id === job.id);
+    if (!target) return;
+
+    btnPeople.disabled = true;
+    btnPeople.textContent = "looking…";
+    peopleList.hidden = true;
+    peopleNote.dataset.tone = "ok";
+    peopleNote.textContent = "asking the directory…";
+
+    try {
+      const res = await callBackend("findPeople", {
+        company: target.company,
+        jobUrl: target.url,
+        role: target.role,
+      });
+
+      if (res.top.length) {
+        showPeople(res.top);
+        peopleNote.textContent = `${res.found} people at ${res.domain}. best ${res.top.length}:`;
+        return;
       }
-      peopleList.hidden = false;
-      peopleNote.textContent = `read ${res.people.length} profiles on that page. best ${ranked.top.length}:`;
+
+      // Nothing in the directory — fall back to whatever page is open.
+      peopleNote.textContent =
+        res.source === "no-directory"
+          ? "no directory configured — reading the open tab instead…"
+          : `nobody listed for ${res.domain}. reading the open tab instead…`;
+      await readOpenTab(target);
     } catch (err) {
-      peopleNote.dataset.tone = "bad";
-      peopleNote.textContent = err.message || String(err);
+      try {
+        await readOpenTab(target);
+      } catch (err2) {
+        peopleNote.dataset.tone = "bad";
+        peopleNote.textContent = err2.message || String(err2);
+      }
     } finally {
       btnPeople.disabled = false;
       btnPeople.textContent = "who?";

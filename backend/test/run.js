@@ -747,6 +747,63 @@ const crowd = [
   check("refuses an empty list", /no people to rank/.test(empty.error), empty.error);
 }
 
+console.log("\npeople — directory search");
+{
+  P.setProperty("VERIFIER", "hunter"); P.setProperty("VERIFIER_API_KEY", "hk");
+  __resetFetch();
+  __queueFetch({ body: { data: { emails: [
+    { value: "ravi@acme.com", first_name: "Ravi", last_name: "Menon", position: "Technical Recruiter", confidence: 95 },
+    { value: "priya@acme.com", first_name: "Priya", last_name: "Raman", position: "Senior Frontend Engineer", confidence: 92 },
+    { value: "sam@acme.com", first_name: "Sam", last_name: "Whitfield", position: "VP of Engineering", confidence: 71 },
+  ] } } });
+  const r = post({ action: "findPeople", token: TOKEN, payload: {
+    company: "Acme", domain: "acme.com", role: "Senior Frontend Engineer" } });
+  check("finds people without any page open", r.ok === true, r.error);
+  check("reports the directory answered", r.data.source === "hunter", r.data.source);
+  check("returns the ranked best", r.data.top.length === 3, r.data.top.length);
+  check("the engineer outranks the VP",
+    r.data.top.findIndex((p) => p.name === "Priya Raman") < r.data.top.findIndex((p) => p.name === "Sam Whitfield"),
+    r.data.top.map((p) => p.name));
+  const priya = r.data.top.find((p) => p.name === "Priya Raman");
+  check("addresses come back attached", priya.email === "priya@acme.com", priya);
+  check("high confidence is verified", priya.email_status === "verified", priya);
+  const sam = r.data.top.find((p) => p.name === "Sam Whitfield");
+  check("71% stays unverified", sam.email_status === "unverified", sam);
+  check("one credit for the whole company",
+    __fetchLog.filter((c) => c.url.indexOf("domain-search") !== -1).length === 1);
+}
+{
+  // hunter knows the domain but lists nobody
+  __resetFetch(); __queueFetch({ body: { data: { emails: [] } } });
+  const r = post({ action: "findPeople", token: TOKEN, payload: { company: "Acme", domain: "acme.com" } });
+  check("an empty directory is reported, not an error", r.ok === true && r.data.source === "hunter-empty", r.data);
+  check("and returns no one rather than inventing anyone", r.data.top.length === 0);
+}
+{
+  __resetFetch(); __queueFetch({ code: 429, body: { errors: [{ details: "rate limited" }] } });
+  const r = post({ action: "findPeople", token: TOKEN, payload: { company: "Acme", domain: "acme.com" } });
+  check("a rate limit degrades to empty, not a crash", r.ok === true && r.data.top.length === 0, r.data);
+}
+{
+  P.setProperty("VERIFIER", ""); P.setProperty("VERIFIER_API_KEY", "");
+  __resetFetch();
+  const r = post({ action: "findPeople", token: TOKEN, payload: { company: "Acme", domain: "acme.com" } });
+  check("no key means no-directory, so the panel can fall back", r.data.source === "no-directory", r.data.source);
+  P.setProperty("VERIFIER", "hunter"); P.setProperty("VERIFIER_API_KEY", "hk");
+}
+{
+  // a name-less entry still has to be usable
+  __resetFetch();
+  __queueFetch({ body: { data: { emails: [{ value: "dev.ops@acme.com", position: "DevOps Engineer", confidence: 88 }] } } });
+  const r = post({ action: "findPeople", token: TOKEN, payload: { company: "Acme", domain: "acme.com", role: "DevOps Engineer" } });
+  check("a missing name falls back to the address local-part", r.data.top[0].name === "dev ops", r.data.top[0].name);
+}
+{
+  const noDomain = post({ action: "findPeople", token: TOKEN, payload: { company: "" } });
+  check("refuses without a domain it can work out", /domain/.test(noDomain.error), noDomain.error);
+  P.setProperty("VERIFIER", ""); P.setProperty("VERIFIER_API_KEY", "");
+}
+
 console.log("\npeople — connection note");
 {
   P.setProperty("LLM_PROVIDER", "gemini"); P.setProperty("LLM_API_KEY", "test-key");

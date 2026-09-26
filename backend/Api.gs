@@ -40,6 +40,9 @@ var ROUTES = {
   rankPeople: function (payload) {
     return rankPeople_(payload);
   },
+  findPeople: function (payload) {
+    return findPeople_(payload);
+  },
   connectionNote: function (payload) {
     return connectionNote_(payload);
   },

@@ -292,6 +292,101 @@ function hunterFind_(domain, fullName) {
 }
 
 /**
+ * Ask Hunter who works at a company.
+ *
+ * This is the only route to finding people without crawling LinkedIn: give it
+ * a domain and it returns names, titles and addresses it has already observed.
+ * One search credit per company, not per person, so a company with twenty
+ * engineers costs the same as one with two.
+ *
+ * Returns [] rather than throwing — no key, no coverage and a rate limit all
+ * mean the same thing to the caller: fall back to reading a page.
+ */
+function hunterDomainSearch_(domain, limit) {
+  var cfg = verifierConfig_();
+  if (cfg.name !== 'hunter' || !cfg.key || !domain) return [];
+
+  try {
+    var url =
+      'https://api.hunter.io/v2/domain-search?domain=' + encodeURIComponent(domain) +
+      '&limit=' + (limit || 25) +
+      '&api_key=' + encodeURIComponent(cfg.key);
+    var res = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
+    if (res.getResponseCode() !== 200) return [];
+
+    var data = (JSON.parse(res.getContentText()) || {}).data || {};
+    return (data.emails || [])
+      .filter(function (e) { return e && e.value; })
+      .map(function (e) {
+        var name = [e.first_name, e.last_name].filter(Boolean).join(' ');
+        return {
+          name: name || e.value.split('@')[0].replace(/[._]/g, ' '),
+          title: e.position || '',
+          email: e.value,
+          // Hunter's own confidence in the address, reused as the status so the
+          // send gate keeps working on people we never guessed at.
+          email_status: Number(e.confidence) >= 90 ? 'verified' : 'unverified',
+          confidence: Number(e.confidence) || 0,
+          department: e.department || '',
+          seniority: e.seniority || '',
+          profileUrl: e.linkedin || '',
+          degree: '',
+          source: 'hunter',
+        };
+      });
+  } catch (err) {
+    return [];
+  }
+}
+
+/**
+ * payload: { company, jobUrl, role }
+ * Who to ask at this company, ranked, with addresses already attached.
+ */
+function findPeople_(payload) {
+  var job = payload || {};
+  var resolved = job.domain
+    ? { domain: String(job.domain).trim().toLowerCase(), source: 'you typed it' }
+    : resolveDomain_(job.company, job.jobUrl);
+
+  if (!resolved.domain) throw new Error("couldn't work out the company's domain — type one in");
+
+  var people = hunterDomainSearch_(resolved.domain);
+  if (!people.length) {
+    return {
+      domain: resolved.domain,
+      domainSource: resolved.source,
+      source: verifierConfig_().name === 'hunter' ? 'hunter-empty' : 'no-directory',
+      top: [],
+      rest: [],
+    };
+  }
+
+  var ranked = rankPeople_({ people: people, job: job });
+  // rankPeople_ only keeps ranking fields, so put the addresses back.
+  var byName = {};
+  people.forEach(function (p) { byName[p.name] = p; });
+  function rejoin(list) {
+    return list.map(function (r) {
+      var src = byName[r.name] || {};
+      r.email = src.email || '';
+      r.email_status = src.email_status || '';
+      r.confidence = src.confidence || 0;
+      return r;
+    });
+  }
+
+  return {
+    domain: resolved.domain,
+    domainSource: resolved.source,
+    source: 'hunter',
+    found: people.length,
+    top: rejoin(ranked.top),
+    rest: rejoin(ranked.rest),
+  };
+}
+
+/**
  * payload: { name, company, jobUrl, domain? }
  * Returns every candidate with its status. The caller picks; nothing is
  * assumed to be right just because it ranked first.
