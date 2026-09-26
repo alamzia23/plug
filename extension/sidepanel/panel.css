@@ -815,3 +815,28 @@ details[open] > .jd-summary::before {
 .note-chars {
   font-size: 9px;
 }
+
+.domain-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.domain-row input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-size: 11px;
+  color: var(--ink);
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--muted);
+  padding: 2px 0;
+  text-transform: none;
+}
+
+.domain-row input:focus {
+  outline: none;
+  border-bottom-color: var(--hot);
+}

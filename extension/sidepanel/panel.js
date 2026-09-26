@@ -286,7 +286,11 @@ function wireDraft(node, job) {
     peopleNote.textContent = `read ${res.people.length} profiles on that page. best ${ranked.top.length}:`;
   };
 
-  btnPeople.addEventListener("click", async () => {
+  const domainRow = node.querySelector(".domain-row");
+  const domainInput = node.querySelector(".d-domain");
+  const domainGo = node.querySelector(".d-domain-go");
+
+  const lookUpPeople = async (domainOverride) => {
     const target = jobs.find((j) => j.id === job.id);
     if (!target) return;
 
@@ -306,6 +310,7 @@ function wireDraft(node, job) {
         company: target.company,
         jobUrl: target.url,
         role: target.role,
+        domain: domainOverride || target.domain || "",
       });
     } catch (err) {
       why = "directory: " + (err.message || String(err));
@@ -314,6 +319,11 @@ function wireDraft(node, job) {
     if (directory && directory.top.length) {
       showPeople(directory.top);
       peopleNote.textContent = `${directory.found} people at ${directory.domain}. best ${directory.top.length}:`;
+      domainRow.hidden = true;
+      if (domainOverride) {
+        target.domain = domainOverride; // remember the correction for this job
+        await saveJobs();
+      }
       btnPeople.disabled = false;
       btnPeople.textContent = "who?";
       return;
@@ -321,6 +331,14 @@ function wireDraft(node, job) {
 
     if (!why && directory) {
       why = directory.reason || `nobody listed for ${directory.domain}`;
+    }
+
+    // The url's host and the employer's domain are often different — a posting
+    // on careers.capgemini.com can be a Sogeti job. Offer the correction rather
+    // than insisting the guess was right.
+    if (directory && directory.domain) {
+      domainRow.hidden = false;
+      domainInput.value = domainOverride || directory.domain;
     }
 
     peopleNote.textContent = why + " — reading the open tab instead…";
@@ -333,6 +351,15 @@ function wireDraft(node, job) {
     } finally {
       btnPeople.disabled = false;
       btnPeople.textContent = "who?";
+    }
+  };
+
+  btnPeople.addEventListener("click", () => lookUpPeople(""));
+  domainGo.addEventListener("click", () => lookUpPeople(domainInput.value.trim()));
+  domainInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      lookUpPeople(domainInput.value.trim());
     }
   });
 
