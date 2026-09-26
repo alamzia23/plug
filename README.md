@@ -177,6 +177,15 @@ person would empty it in four contacts. Anything that isn't a clear `valid` stay
 without an explicit override. Typing an address by hand counts as vouching for it.
 A confident wrong address is worse than none: it bounces, or it reaches a stranger.
 
+The override lives in the arming click. A live send always takes two clicks, and when
+the address is a guess the first click says so — *"that address is a guess — send
+anyway?"*. Confirming is the override. There's no separate checkbox to overlook, and no
+path to a guessed address that doesn't pass through being told it's a guess.
+
+**Hunter rejects free email addresses at signup**, so if you only have a Gmail account
+you can't get a key. That's fine: skip it, everything stays `unverified`, and you
+confirm each live send. Verification is a convenience, not a dependency.
+
 ## The site (`site/`)
 
 The public landing page and blog, built with **Astro 5** — static output, zero JS by

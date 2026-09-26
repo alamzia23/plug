@@ -320,10 +320,16 @@ function wireDraft(node, job) {
     const target = jobs.find((j) => j.id === job.id);
     if (!target || !target.draft) return;
 
+    const status = (target.contact && target.contact.email_status) || "";
+    const guessed = status === "unverified";
+
+    // The arming click is where the warning belongs. Confirming it IS the
+    // override — there's no separate checkbox to miss, and no way to send to
+    // a guessed address without having been told it was a guess.
     if (!sendInfo.dryRun && !armed) {
       armed = true;
       btnSend.dataset.armed = "true";
-      btnSend.textContent = "click again to send for real";
+      btnSend.textContent = guessed ? "that address is a guess — send anyway?" : "click again to send for real";
       setTimeout(() => { if (armed) disarm(); }, 6000);
       return;
     }
@@ -334,7 +340,8 @@ function wireDraft(node, job) {
       const result = await callBackend("sendEmail", {
         job: { id: target.remoteId || target.id, company: target.company, role: target.role },
         contact: { ...(target.contact || DUMMY_CONTACT), email: toInput.value.trim() },
-        overrideUnverified: false,
+        // only ever true on the second, confirmed click of a live send
+        overrideUnverified: armed,
         subject: target.draft.subject,
         body: target.draft.body,
       });
