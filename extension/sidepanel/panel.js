@@ -305,15 +305,25 @@ function wireDraft(node, job) {
     let directory = null;
     let why = "";
 
-    try {
-      directory = await callBackend("findPeople", {
+    const ask = () =>
+      callBackend("findPeople", {
         company: target.company,
         jobUrl: target.url,
         role: target.role,
         domain: domainOverride || target.domain || "",
       });
+
+    try {
+      directory = await ask();
     } catch (err) {
-      why = "directory: " + (err.message || String(err));
+      // Apps Script sleeps between uses and the first call after idle can die
+      // on the way out. One quiet retry turns "click it twice" into "it works".
+      try {
+        peopleNote.textContent = "waking the backend up…";
+        directory = await ask();
+      } catch (err2) {
+        why = "directory: " + (err2.message || String(err2));
+      }
     }
 
     if (directory && directory.top.length) {

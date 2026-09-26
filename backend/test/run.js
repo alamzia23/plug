@@ -711,6 +711,14 @@ const crowd = [
   check("alumni ranks first", names[0] === "Asha Kapoor", names);
   check("same-function engineer beats the recruiter",
     names.indexOf("Priya Raman") < names.indexOf("Ravi Menon") || names.indexOf("Ravi Menon") === -1, names);
+
+  // the slate is one of each kind, not three of the best kind
+  const kinds = r.data.top.map((p) => p.kind);
+  check("the shortlist mixes kinds", new Set(kinds).size === kinds.length, kinds);
+  check("a peer is picked first", kinds[0] === "peer", kinds);
+  check("a recruiter still gets a slot", kinds.indexOf("recruiter") !== -1, kinds);
+  check("a VP counts as senior, not a peer",
+    [].concat(r.data.top, r.data.rest).find((p) => p.name === "Sam Whitfield").kind === "senior");
   const vp = [].concat(r.data.top, r.data.rest).find((p) => p.name === "Sam Whitfield");
   check("a VP is marked too senior", vp.reasons.indexOf("probably too senior") !== -1, vp.reasons);
   const recruiter = [].concat(r.data.top, r.data.rest).find((p) => p.name === "Ravi Menon");
@@ -738,6 +746,20 @@ const crowd = [
 }
 {
   // "Senior" and "Lead" are noise — they shouldn't create a false match
+  // "Senior Software Developer" is a same-function match for "DevOps Engineer"
+  {
+    const r2 = post({ action: "rankPeople", token: TOKEN, payload: {
+      people: [{ name: "Sam Rivera", title: "Senior Software Developer" }],
+      job: { role: "DevOps Engineer" } } });
+    check("developer matches engineer", r2.data.top[0].reasons.indexOf("same function") !== -1, r2.data.top[0]);
+    check("and a senior developer is a senior, not a peer", r2.data.top[0].kind === "senior", r2.data.top[0].kind);
+  }
+  {
+    const r3 = post({ action: "rankPeople", token: TOKEN, payload: {
+      people: [{ name: "X", title: "Site Reliability Engineer" }],
+      job: { role: "DevOps Engineer" } } });
+    check("sre matches devops", r3.data.top[0].reasons.indexOf("same function") !== -1, r3.data.top[0]);
+  }
   check("seniority words are stripped from the role",
     roleKeywords_("Senior Staff Lead Frontend Engineer II").join(",") === "frontend,engineer",
     roleKeywords_("Senior Staff Lead Frontend Engineer II"));

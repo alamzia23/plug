@@ -16,6 +16,37 @@
 var RECRUITER_WORDS = /\b(recruit\w*|talent|sourc\w*|staffing|hiring|people ops|peopleops|hr|human resources)\b/i;
 var SENIOR_WORDS = /\b(vp|vice president|chief|cto|ceo|cfo|coo|head of|director|president)\b/i;
 
+/**
+ * Job titles say the same thing many ways. "Senior Software Developer" is a
+ * same-function match for "DevOps Engineer" in every way that matters to a
+ * referral, and scoring it "no strong signal" because the word "engineer" is
+ * missing is a failure of vocabulary, not of judgement.
+ */
+var SYNONYMS = [
+  ['engineer', 'developer', 'dev', 'programmer', 'swe', 'engineering'],
+  ['devops', 'sre', 'platform', 'infrastructure', 'infra', 'cloud', 'reliability', 'ops'],
+  ['frontend', 'front', 'ui', 'web', 'client'],
+  ['backend', 'back', 'server', 'api'],
+  ['data', 'analytics', 'ml', 'ai', 'machine'],
+  ['security', 'appsec', 'infosec', 'cyber'],
+  ['mobile', 'ios', 'android'],
+  ['qa', 'test', 'testing', 'quality'],
+];
+
+/** Every word that means the same as one of these, for matching purposes. */
+function expandKeywords_(words) {
+  var out = {};
+  words.forEach(function (w) {
+    out[w] = true;
+    SYNONYMS.forEach(function (group) {
+      if (group.indexOf(w) !== -1) {
+        group.forEach(function (g) { out[g] = true; });
+      }
+    });
+  });
+  return Object.keys(out);
+}
+
 /** Words in the job title that say something, once the noise is dropped. */
 function roleKeywords_(role) {
   var stop = /\b(senior|sr|junior|jr|staff|principal|lead|i|ii|iii|the|and|of|at|for|remote|full|time|intern)\b/gi;
@@ -45,7 +76,7 @@ function scorePerson_(person, job, resume) {
   }
 
   // Same function: they can judge whether the work matches, which a recruiter can't.
-  var keywords = roleKeywords_(job.role);
+  var keywords = expandKeywords_(roleKeywords_(job.role));
   var overlap = keywords.filter(function (k) { return title.indexOf(k) !== -1; });
   if (overlap.length) {
     score += 30 + overlap.length * 5;
@@ -103,17 +134,75 @@ function rankPeople_(payload) {
         profileUrl: p.profileUrl || '',
         score: s.score,
         reasons: s.reasons,
+        kind: kindOf_(p, job),
       };
     })
     .sort(function (a, b) { return b.score - a.score; });
 
+  var slate = buildSlate_(ranked, cap);
+  var chosen = {};
+  slate.forEach(function (p) { chosen[p.name] = true; });
+
   return {
-    // The cap is a rule, not a suggestion: three asks at one company is the
-    // limit before it reads as a mailshot.
-    top: ranked.slice(0, cap),
-    rest: ranked.slice(cap),
+    top: slate,
+    rest: ranked.filter(function (p) { return !chosen[p.name]; }),
     cap: cap,
   };
+}
+
+// Includes SENIOR_WORDS by reference below: a VP of Engineering is same-function
+// and unmistakably not a peer, and omitting "vp" put one in the peer slot.
+var LEADER_WORDS = /\b(senior|sr|staff|principal|lead|leader|manager|head|director|architect)\b/i;
+
+/**
+ * Which bet this person represents. They pay off differently, which is the
+ * whole reason to pick one of each.
+ */
+function kindOf_(person, job) {
+  var title = String(person.title || '').toLowerCase();
+  if (RECRUITER_WORDS.test(title)) return 'recruiter';
+
+  var keywords = expandKeywords_(roleKeywords_(job.role));
+  var sameFunction = keywords.some(function (k) { return title.indexOf(k) !== -1; });
+  if (!sameFunction) return 'other';
+  return LEADER_WORDS.test(title) || SENIOR_WORDS.test(title) ? 'senior' : 'peer';
+}
+
+/**
+ * One of each kind before a second of any.
+ *
+ * Three peers is one bet placed three times: if that kind of person doesn't
+ * reply, nothing else was tried. A peer is likeliest to answer, a senior in
+ * the same function carries the most weight if they do, and a recruiter is
+ * the dependable floor — they are paid to reply even when they won't champion
+ * you. Spreading the asks across all three is worth more than three copies of
+ * the best-scoring one.
+ */
+function buildSlate_(ranked, cap) {
+  var order = ['peer', 'senior', 'recruiter'];
+  var picked = [];
+  var used = {};
+
+  order.forEach(function (kind) {
+    if (picked.length >= cap) return;
+    for (var i = 0; i < ranked.length; i++) {
+      if (used[i]) continue;
+      if (ranked[i].kind !== kind) continue;
+      used[i] = true;
+      picked.push(ranked[i]);
+      return;
+    }
+  });
+
+  // Nothing of a given kind exists at this company — fill by score rather than
+  // leaving a slot empty.
+  for (var j = 0; j < ranked.length && picked.length < cap; j++) {
+    if (!used[j]) {
+      used[j] = true;
+      picked.push(ranked[j]);
+    }
+  }
+  return picked;
 }
 
 var NOTE_SYSTEM = [

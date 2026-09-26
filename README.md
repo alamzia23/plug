@@ -296,8 +296,26 @@ shipped to the browser:
 | recruiter | +10 | last, not first — they get the most of these and have the least incentive |
 | VP and above | −15 | a VP forwarding you to a recruiter is worth less than a peer clicking refer |
 
-Capped at `MAX_CONTACTS_PER_JOB` (3). Three asks at one company is the limit before it
-reads as a mailshot.
+Job titles say the same thing many ways, so matching runs over synonym groups:
+`developer` ≈ `engineer`, `sre` ≈ `devops` ≈ `platform`. Without that, a Senior Software
+Developer scores "no strong signal" against a DevOps Engineer role, which is a failure
+of vocabulary rather than judgement.
+
+### The shortlist is a portfolio, not a top three
+
+Picking the three highest scores tends to return three similar people — and three peers
+is one bet placed three times. The slate takes **one of each kind** before a second of
+any:
+
+| kind | reply rate | payoff |
+| --- | --- | --- |
+| **peer**, same function | highest | medium — a ninety-second favour with a bonus attached |
+| **senior**, same function | lower | highest — their referral carries weight |
+| **recruiter** | dependable | lowest — paid to reply, least incentive to champion you |
+
+If a company has nobody of a given kind, the slot is filled by score rather than left
+empty. Capped at `MAX_CONTACTS_PER_JOB` (3) — three asks at one company is the limit
+before it reads as a mailshot.
 
 Picking someone generates a **LinkedIn connection note** under 280 characters, which you
 copy and send yourself. It deliberately doesn't ask for the referral — the note is to
