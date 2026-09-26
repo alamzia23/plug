@@ -296,32 +296,43 @@ function wireDraft(node, job) {
     peopleNote.dataset.tone = "ok";
     peopleNote.textContent = "asking the directory…";
 
+    // Why the directory didn't answer is the useful half of a failure here —
+    // "no profiles on this page" is the fallback's complaint, not the cause.
+    let directory = null;
+    let why = "";
+
     try {
-      const res = await callBackend("findPeople", {
+      directory = await callBackend("findPeople", {
         company: target.company,
         jobUrl: target.url,
         role: target.role,
       });
-
-      if (res.top.length) {
-        showPeople(res.top);
-        peopleNote.textContent = `${res.found} people at ${res.domain}. best ${res.top.length}:`;
-        return;
-      }
-
-      // Nothing in the directory — fall back to whatever page is open.
-      peopleNote.textContent =
-        res.source === "no-directory"
-          ? "no directory configured — reading the open tab instead…"
-          : `nobody listed for ${res.domain}. reading the open tab instead…`;
-      await readOpenTab(target);
     } catch (err) {
-      try {
-        await readOpenTab(target);
-      } catch (err2) {
-        peopleNote.dataset.tone = "bad";
-        peopleNote.textContent = err2.message || String(err2);
-      }
+      why = "directory: " + (err.message || String(err));
+    }
+
+    if (directory && directory.top.length) {
+      showPeople(directory.top);
+      peopleNote.textContent = `${directory.found} people at ${directory.domain}. best ${directory.top.length}:`;
+      btnPeople.disabled = false;
+      btnPeople.textContent = "who?";
+      return;
+    }
+
+    if (!why && directory) {
+      why =
+        directory.source === "no-directory"
+          ? "no directory key configured"
+          : `nobody listed for ${directory.domain}`;
+    }
+
+    peopleNote.textContent = why + " — reading the open tab instead…";
+    try {
+      await readOpenTab(target);
+    } catch (err2) {
+      // Both halves, so the real cause isn't hidden behind the fallback's.
+      peopleNote.dataset.tone = "bad";
+      peopleNote.textContent = why + " · " + (err2.message || String(err2));
     } finally {
       btnPeople.disabled = false;
       btnPeople.textContent = "who?";
