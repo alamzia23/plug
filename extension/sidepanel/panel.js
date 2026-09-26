@@ -143,7 +143,7 @@ function wireDraft(node, job) {
 
   // A guessed address carries its status all the way to the send, where an
   // unverified one is refused. Typing one by hand is treated as deliberate.
-  const setAddress = (email, status) => {
+  const setAddress = (email, status, reason) => {
     toInput.value = email;
     const target = jobs.find((j) => j.id === job.id);
     if (target) {
@@ -152,11 +152,12 @@ function wireDraft(node, job) {
     }
     findNote.dataset.status = status;
     findNote.textContent =
-      status === "verified"
+      reason ||
+      (status === "verified"
         ? "verified. safe to send."
         : status === "invalid"
-        ? "the verifier says this address is bad."
-        : "a guess, not checked. it won't go out on a live send unless you say so.";
+        ? "that address is bad."
+        : "a guess, not checked. it won't go out on a live send unless you say so.");
     paintSendState();
   };
 
@@ -183,7 +184,7 @@ function wireDraft(node, job) {
         jobUrl: target.url,
       });
 
-      setAddress(res.best.email, res.best.status);
+      setAddress(res.best.email, res.best.status, res.best.reason);
 
       // Show the alternatives: the top pattern is the most common, not the
       // most likely for any particular company.
@@ -204,7 +205,11 @@ function wireDraft(node, job) {
       guesses.hidden = res.candidates.length < 2;
 
       const src = res.domainSource === "guessed" ? " (domain guessed)" : "";
-      say(`${res.domain}${src} · ${res.candidates.length} possible addresses.`);
+      say(
+        res.askedDirectly
+          ? `${res.domain}${src} · hunter knew this one.`
+          : `${res.domain}${src} · ${res.candidates.length} possible addresses.`
+      );
     } catch (err) {
       findNote.dataset.status = "invalid";
       findNote.textContent = err.message || String(err);

@@ -363,17 +363,19 @@ console.log("\nemail finder — statuses");
 {
   P.setProperty("HUNTER_API_KEY", "hk");
   __resetFetch();
+  __queueFetch({ body: { data: { email: null } } }); // finder: no idea
   __queueFetch({ body: { data: { status: "valid" } } });
   const r = post({ action: "findEmail", token: TOKEN, payload: {
     name: "Priya Raman", company: "Acme", domain: "acme.com" } });
   check("a valid verdict verifies the top guess", r.data.best.status === "verified", r.data.best);
-  const verifierCalls = __fetchLog.filter((c) => c.url.indexOf("dns.google") === -1);
-  check("only the top candidate is checked", verifierCalls.length === 1, verifierCalls.length);
+  const verifyCalls = __fetchLog.filter((c) => c.url.indexOf("email-verifier") !== -1);
+  check("only the top candidate is checked", verifyCalls.length === 1, verifyCalls.length);
   check("the rest stay unverified", r.data.candidates.slice(1).every((c) => c.status === "unverified"));
   check("typed domain is used as-is", r.data.domainSource === "you typed it");
 }
 {
   __resetFetch();
+  __queueFetch({ body: { data: { email: null } } }); // finder: no idea
   __queueFetch({ body: { data: { status: "invalid" } } });
   const r = post({ action: "findEmail", token: TOKEN, payload: { name: "Priya Raman", domain: "acme.com" } });
   check("an invalid verdict is reported as invalid", r.data.best.status === "invalid", r.data.best);
@@ -381,12 +383,14 @@ console.log("\nemail finder — statuses");
 {
   // "accept_all" and friends must never be treated as a yes
   __resetFetch();
+  __queueFetch({ body: { data: { email: null } } }); // finder: no idea
   __queueFetch({ body: { data: { status: "accept_all" } } });
   const r = post({ action: "findEmail", token: TOKEN, payload: { name: "Priya Raman", domain: "acme.com" } });
   check("a maybe is not upgraded to verified", r.data.best.status === "unverified", r.data.best);
 }
 {
   __resetFetch();
+  __queueFetch({ body: { data: { email: null } } }); // finder: no idea
   __queueFetch({ code: 401, body: { errors: [{ details: "bad key" }] } });
   const r = post({ action: "findEmail", token: TOKEN, payload: { name: "Priya Raman", domain: "acme.com" } });
   check("a broken verifier downgrades rather than throws", r.ok === true && r.data.best.status === "unverified", r.data.best);
@@ -462,10 +466,75 @@ console.log("\nemail finder — pluggable verifiers");
 {
   // the old property still works for anyone who set it up before
   P.setProperty("HUNTER_API_KEY", "hk");
-  __resetFetch(); __queueFetch({ body: { data: { status: "valid" } } });
+  __resetFetch();
+  __queueFetch({ body: { data: { email: null } } }); // finder: no idea
+  __queueFetch({ body: { data: { status: "valid" } } });
   const r = post({ action: "findEmail", token: TOKEN, payload: { name: "Priya Raman", domain: "acme.com" } });
   check("HUNTER_API_KEY alone still selects hunter", r.data.verifier === "hunter" && r.data.best.status === "verified", r.data);
   P.setProperty("HUNTER_API_KEY", "");
+}
+
+console.log("\nemail finder — hunter asks outright");
+{
+  P.setProperty("VERIFIER", "hunter"); P.setProperty("VERIFIER_API_KEY", "hk");
+  __resetFetch();
+  __queueFetch({ body: { data: { email: "praman@acme.com", score: 97, sources: [{}, {}, {}] } } });
+  const r = post({ action: "findEmail", token: TOKEN, payload: { name: "Priya Raman", domain: "acme.com" } });
+  check("uses the address hunter knows, not the popular pattern",
+    r.data.best.email === "praman@acme.com", r.data.best.email);
+  check("a 97% hit counts as verified", r.data.best.status === "verified", r.data.best);
+  check("says where it came from", /hunter found this, 97%/.test(r.data.best.reason), r.data.best.reason);
+  check("names the source count", /3 sources/.test(r.data.best.reason), r.data.best.reason);
+  check("flags that it asked rather than guessed", r.data.askedDirectly === true);
+  check("guesses are kept as alternatives", r.data.candidates.length > 1);
+  check("one call, not one per pattern",
+    __fetchLog.filter((c) => c.url.indexOf("dns.google") === -1).length === 1);
+  check("hit the finder endpoint",
+    /email-finder/.test(__fetchLog.filter((c) => c.url.indexOf("dns.google") === -1)[0].url));
+}
+{
+  // a middling score is the best candidate but is NOT a verification
+  __resetFetch();
+  __queueFetch({ body: { data: { email: "p.raman@acme.com", score: 62, sources: [] } } });
+  const r = post({ action: "findEmail", token: TOKEN, payload: { name: "Priya Raman", domain: "acme.com" } });
+  check("62% ranks first but stays unverified", r.data.best.email === "p.raman@acme.com" && r.data.best.status === "unverified", r.data.best);
+  check("the score is shown either way", /62%/.test(r.data.best.reason), r.data.best.reason);
+}
+{
+  // hunter doesn't know them -> fall back to guessing, then verify the top guess
+  __resetFetch();
+  __queueFetch({ body: { data: { email: null } } });     // finder: no idea
+  __queueFetch({ body: { data: { status: "valid" } } }); // verifier on the top guess
+  const r = post({ action: "findEmail", token: TOKEN, payload: { name: "Priya Raman", domain: "acme.com" } });
+  check("falls back to the pattern guess", r.data.best.email === "priya.raman@acme.com", r.data.best.email);
+  check("and verifies that guess", r.data.best.status === "verified", r.data.best);
+  check("reports it had to guess", r.data.askedDirectly === false);
+}
+{
+  // the finder being down must not break the fallback
+  __resetFetch();
+  __queueFetch({ code: 429, body: { errors: [{ details: "rate limited" }] } });
+  __queueFetch({ body: { data: { status: "valid" } } });
+  const r = post({ action: "findEmail", token: TOKEN, payload: { name: "Priya Raman", domain: "acme.com" } });
+  check("a rate-limited finder degrades to guessing", r.ok === true && r.data.best.email === "priya.raman@acme.com", r.data.best);
+}
+{
+  // no duplicate when hunter returns the same address the pattern would have
+  __resetFetch();
+  __queueFetch({ body: { data: { email: "priya.raman@acme.com", score: 95, sources: [{}] } } });
+  const r = post({ action: "findEmail", token: TOKEN, payload: { name: "Priya Raman", domain: "acme.com" } });
+  const dupes = r.data.candidates.filter((c) => c.email === "priya.raman@acme.com");
+  check("no duplicate candidate when they agree", dupes.length === 1, r.data.candidates.map((c) => c.email));
+}
+{
+  // other verifiers have no finder, so nothing should change for them
+  P.setProperty("VERIFIER", "abstract");
+  __resetFetch();
+  __queueFetch({ body: { deliverability: "DELIVERABLE" } });
+  const r = post({ action: "findEmail", token: TOKEN, payload: { name: "Priya Raman", domain: "acme.com" } });
+  check("non-hunter verifiers still just verify the top guess",
+    r.data.askedDirectly === false && r.data.best.email === "priya.raman@acme.com", r.data.best);
+  P.setProperty("VERIFIER", ""); P.setProperty("VERIFIER_API_KEY", "");
 }
 
 console.log("\nemail finder — the send gate");

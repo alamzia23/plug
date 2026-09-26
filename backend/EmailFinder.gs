@@ -245,6 +245,53 @@ function verifyEmail_(email) {
 }
 
 /**
+ * Ask Hunter for the address outright.
+ *
+ * This is strictly better than guessing when it works: Hunter derives the
+ * answer from addresses it has actually observed on that domain, so it knows
+ * the company's real pattern rather than assuming the most common one. Six
+ * guesses and a shrug becomes one address and a number.
+ *
+ * Returns null when it can't help, so the caller falls back to guessing.
+ */
+function hunterFind_(domain, fullName) {
+  var cfg = verifierConfig_();
+  if (cfg.name !== 'hunter' || !cfg.key || !domain || !fullName) return null;
+
+  try {
+    var url =
+      'https://api.hunter.io/v2/email-finder?domain=' + encodeURIComponent(domain) +
+      '&full_name=' + encodeURIComponent(fullName) +
+      '&api_key=' + encodeURIComponent(cfg.key);
+    var res = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
+    if (res.getResponseCode() !== 200) return null;
+
+    var data = (JSON.parse(res.getContentText()) || {}).data || {};
+    if (!data.email) return null;
+
+    var score = Number(data.score) || 0;
+    var sources = (data.sources || []).length;
+
+    // A high score means Hunter has seen this address, which is stronger
+    // evidence than an SMTP probe. Below that it's still the best candidate,
+    // but it is not a verification and must not be labelled as one.
+    var status = score >= 90 ? 'verified' : 'unverified';
+
+    return {
+      email: data.email,
+      pattern: 'hunter',
+      rank: 0,
+      status: status,
+      score: score,
+      reason: 'hunter found this, ' + score + '% confidence' +
+        (sources ? ' from ' + sources + ' source' + (sources === 1 ? '' : 's') : ''),
+    };
+  } catch (err) {
+    return null; // never let the finder break the fallback
+  }
+}
+
+/**
  * payload: { name, company, jobUrl, domain? }
  * Returns every candidate with its status. The caller picks; nothing is
  * assumed to be right just because it ranked first.
@@ -262,14 +309,24 @@ function findEmail_(payload) {
   var candidates = patternsFor_(name, resolved.domain);
   if (!candidates.length) throw new Error('could not build any address from "' + name + '"');
 
-  // Only the top guess is verified: the free tier is ~25 checks a month and
-  // burning six on one person would empty it in four contacts.
-  var top = verifyEmail_(candidates[0].email);
-  candidates[0].status = top.status;
-  candidates[0].reason = top.reason;
-  for (var i = 1; i < candidates.length; i++) {
+  for (var i = 0; i < candidates.length; i++) {
     candidates[i].status = 'unverified';
     candidates[i].reason = 'not checked';
+  }
+
+  // Ask outright before guessing. One call either way, and a known address
+  // beats the most popular pattern every time.
+  var found = hunterFind_(resolved.domain, name);
+  if (found) {
+    candidates = [found].concat(
+      candidates.filter(function (c) { return c.email !== found.email; })
+    );
+  } else {
+    // No answer, so fall back to checking the top guess. Only the top one:
+    // free tiers are small and six checks per person empties one fast.
+    var top = verifyEmail_(candidates[0].email);
+    candidates[0].status = top.status;
+    candidates[0].reason = top.reason;
   }
 
   return {
@@ -279,5 +336,6 @@ function findEmail_(payload) {
     verifier: verifierConfig_().name || 'none (mx check only)',
     candidates: candidates,
     best: candidates[0],
+    askedDirectly: Boolean(found),
   };
 }

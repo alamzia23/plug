@@ -185,6 +185,13 @@ providers — nothing above it knows which service answered.
 | `VERIFIER` | `abstract` · `mailboxlayer` · `hunter` |
 | `VERIFIER_API_KEY` | that service's key |
 
+**With Hunter, it asks instead of guessing.** Hunter's Email Finder returns the
+person's actual address with a confidence score, derived from addresses it has observed
+on that domain — so it knows the company's real pattern rather than assuming the most
+common one. A score of 90+ counts as `verified`; below that the address still ranks
+first but is explicitly not a verification. If Hunter doesn't know them, it falls back
+to guessing and verifies the top guess. Either way it's one API call.
+
 **Hunter refuses free email addresses at signup**, so on a Gmail-only account use
 `abstract` ([app.abstractapi.com](https://app.abstractapi.com), 100/month free) or
 `mailboxlayer`. Skipping it entirely is fine too — you just confirm each live send.
