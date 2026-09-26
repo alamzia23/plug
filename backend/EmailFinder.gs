@@ -339,19 +339,53 @@ function hunterDomainSearch_(domain, limit, role) {
     // Ask for the right people rather than filtering afterwards: a filtered
     // request spends credits on candidates worth ranking, an unfiltered one
     // spends them on whoever Hunter happens to know.
-    // Recruiters live in hr, so filtering to the role's own department alone
-    // makes the recruiter slot unfillable. Asking for both in one request
-    // costs one call rather than two.
     var department = departmentFor_(role);
-    if (department && department !== 'hr') department = department + ',hr';
+
+    // Asking for "it,hr" in one request let hr dominate the results: a DevOps
+    // search came back with one engineer and two HR managers. Credits are per
+    // address, not per call, so two targeted requests cost exactly the same as
+    // one mixed one and guarantee the composition.
+    //
+    // Most of the budget goes to the role's own department, because only an
+    // employee can actually refer you — a recruiter is the process, not a
+    // referral, and the slate needs exactly one.
+    var hrWant = department && department !== 'hr' ? Math.min(2, Math.max(1, Math.floor(want / 5))) : 0;
+    var mainWant = want - hrWant;
+
+    var out = hunterFetchPage_(domain, mainWant, department, cfg.key);
+    if (out.error) return { people: [], reason: out.error, department: department };
+
+    var people = out.people;
+    if (hrWant) {
+      var hr = hunterFetchPage_(domain, hrWant, 'hr', cfg.key);
+      people = people.concat(hr.people || []); // an hr failure is survivable
+    }
+
+    return {
+      people: people,
+      department: department ? department + ' + hr' : '',
+      reason: people.length
+        ? people.length + ' of ' + want + ' requested'
+        : 'nobody matching' + (department ? ' in ' + department : '') + ' at ' + domain +
+          ' — try a different domain, or widen DIRECTORY_LIMIT',
+    };
+  } catch (err) {
+    return { people: [], reason: 'hunter failed: ' + err };
+  }
+}
+
+/** One page of Hunter's directory. Separated so the budget can be split by department. */
+function hunterFetchPage_(domain, limit, department, key) {
+  if (limit < 1) return { people: [] };
+  try {
     var url =
       'https://api.hunter.io/v2/domain-search?domain=' + encodeURIComponent(domain) +
-      '&limit=' + want +
+      '&limit=' + limit +
       // junior + senior deliberately omits 'executive'. A VP forwarding you to
       // a recruiter is worth less than a peer clicking refer.
       '&seniority=junior,senior' +
       (department ? '&department=' + encodeURIComponent(department) : '') +
-      '&api_key=' + encodeURIComponent(cfg.key);
+      '&api_key=' + encodeURIComponent(key);
     var res = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
     var raw = res.getContentText();
 
@@ -359,14 +393,11 @@ function hunterDomainSearch_(domain, limit, role) {
     // the reason travels with it — "nobody works there" and "your quota is
     // spent" need completely different responses from the user.
     if (res.getResponseCode() !== 200) {
-      return {
-        people: [],
-        reason: 'hunter http ' + res.getResponseCode() + ': ' + errorMessage_(raw).slice(0, 160),
-      };
+      return { people: [], error: 'hunter http ' + res.getResponseCode() + ': ' + errorMessage_(raw).slice(0, 160) };
     }
 
     var data = (JSON.parse(raw) || {}).data || {};
-    var people = (data.emails || [])
+    var found = (data.emails || [])
       .filter(function (e) { return e && e.value; })
       .map(function (e) {
         var name = [e.first_name, e.last_name].filter(Boolean).join(' ');
@@ -386,16 +417,9 @@ function hunterDomainSearch_(domain, limit, role) {
         };
       });
 
-    return {
-      people: people,
-      department: department,
-      reason: people.length
-        ? people.length + ' of ' + want + ' requested'
-        : 'nobody matching' + (department ? ' in ' + department : '') + ' at ' + domain +
-          ' — try a different domain, or widen DIRECTORY_LIMIT',
-    };
+    return { people: found };
   } catch (err) {
-    return { people: [], reason: 'hunter failed: ' + err };
+    return { people: [], error: 'hunter failed: ' + err };
   }
 }
 

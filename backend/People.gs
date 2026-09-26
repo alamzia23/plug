@@ -203,12 +203,15 @@ function buildSlate_(ranked, cap) {
   });
 
   // Nothing of a given kind exists at this company — fill by score rather than
-  // leaving a slot empty.
+  // leaving a slot empty. One recruiter is a fallback channel; two is an ask
+  // spent on someone who cannot refer you either way.
+  var haveRecruiter = picked.some(function (p) { return p.kind === 'recruiter'; });
   for (var j = 0; j < ranked.length && picked.length < cap; j++) {
-    if (!used[j]) {
-      used[j] = true;
-      picked.push(ranked[j]);
-    }
+    if (used[j]) continue;
+    if (ranked[j].kind === 'recruiter' && haveRecruiter) continue;
+    if (ranked[j].kind === 'recruiter') haveRecruiter = true;
+    used[j] = true;
+    picked.push(ranked[j]);
   }
   return picked;
 }

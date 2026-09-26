@@ -317,8 +317,12 @@ any:
 a Senior Software Developer is the archetypal peer and the best single person to ask.
 Only `lead`, `manager`, `head`, `director` and above count as senior.
 
-The directory request asks for the role's department **plus `hr`**, because recruiters
-live in HR and filtering to engineering alone makes the recruiter slot unfillable.
+Recruiters live in HR, so the budget is **split across two requests** — most of it to
+the role's own department, one or two to `hr`. Asking for `it,hr` in a single request
+let HR dominate: a DevOps search returned one engineer and two HR managers. Credits are
+per address, not per call, so two targeted requests cost exactly the same and guarantee
+the composition. At most one recruiter ever reaches the slate — a second is an ask spent
+on someone who can't refer you either way.
 
 If a company has nobody of a given kind, the slot is filled by score rather than left
 empty. Capped at `MAX_CONTACTS_PER_JOB` (3) — three asks at one company is the limit

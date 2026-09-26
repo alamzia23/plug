@@ -783,9 +783,11 @@ console.log("\npeople — directory search");
   P.setProperty("VERIFIER", "hunter"); P.setProperty("VERIFIER_API_KEY", "hk");
   __resetFetch();
   __queueFetch({ body: { data: { emails: [
-    { value: "ravi@acme.com", first_name: "Ravi", last_name: "Menon", position: "Technical Recruiter", confidence: 95 },
     { value: "priya@acme.com", first_name: "Priya", last_name: "Raman", position: "Senior Frontend Engineer", confidence: 92 },
     { value: "sam@acme.com", first_name: "Sam", last_name: "Whitfield", position: "VP of Engineering", confidence: 71 },
+  ] } } });
+  __queueFetch({ body: { data: { emails: [
+    { value: "ravi@acme.com", first_name: "Ravi", last_name: "Menon", position: "Technical Recruiter", confidence: 95 },
   ] } } });
   const r = post({ action: "findPeople", token: TOKEN, payload: {
     company: "Acme", domain: "acme.com", role: "Senior Frontend Engineer" } });
@@ -801,16 +803,21 @@ console.log("\npeople — directory search");
   const sam = r.data.top.find((p) => p.name === "Sam Whitfield");
   check("71% stays unverified", sam.email_status === "unverified", sam);
   const ds = __fetchLog.filter((c) => c.url.indexOf("domain-search") !== -1);
-  check("one request per lookup", ds.length === 1);
-  // hunter bills per revealed address, so the ask has to stay small by default
-  check("asks for a modest number of people", /[?&]limit=10\b/.test(ds[0].url), ds[0].url);
-  check("asks for the right department", /[?&]department=it(,|%2C)hr\b/.test(ds[0].url), decodeURIComponent(ds[0].url));
-  check("includes hr so a recruiter can fill its slot", /hr/.test(decodeURIComponent(ds[0].url)));
+  // Two targeted requests cost the same as one mixed one — credits are per
+  // address — and stop hr dominating the results.
+  check("splits the budget across two requests", ds.length === 2, ds.length);
+  check("most of the budget goes to the role's department",
+    /[?&]limit=8\b/.test(ds[0].url) && /[?&]department=it\b/.test(ds[0].url), ds[0].url);
+  check("a small slice goes to hr",
+    /[?&]limit=2\b/.test(ds[1].url) && /[?&]department=hr\b/.test(ds[1].url), ds[1].url);
+  check("the two together stay within DIRECTORY_LIMIT",
+    Number(ds[0].url.match(/limit=(\d+)/)[1]) + Number(ds[1].url.match(/limit=(\d+)/)[1]) === 10);
+  check("executives excluded from both", ds.every((c) => /seniority=junior,senior/.test(c.url)));
   check("excludes executives from the ask", /seniority=junior,senior/.test(ds[0].url), ds[0].url);
 }
 {
   setSetting_("DIRECTORY_LIMIT", "3");
-  __resetFetch(); __queueFetch({ body: { data: { emails: [] } } });
+  __resetFetch(); __queueFetch({ body: { data: { emails: [] } } }); __queueFetch({ body: { data: { emails: [] } } });
   post({ action: "findPeople", token: TOKEN, payload: { company: "Acme", domain: "acme.com" } });
   const ds2 = __fetchLog.filter((c) => c.url.indexOf("domain-search") !== -1);
   check("DIRECTORY_LIMIT is respected", /[?&]limit=3\b/.test(ds2[0].url), ds2[0].url);
@@ -818,7 +825,7 @@ console.log("\npeople — directory search");
 }
 {
   // hunter knows the domain but lists nobody
-  __resetFetch(); __queueFetch({ body: { data: { emails: [] } } });
+  __resetFetch(); __queueFetch({ body: { data: { emails: [] } } }); __queueFetch({ body: { data: { emails: [] } } });
   const r = post({ action: "findPeople", token: TOKEN, payload: { company: "Acme", domain: "acme.com" } });
   check("an empty directory is reported, not an error", r.ok === true && r.data.source === "hunter-empty", r.data);
   check("and says the listing was genuinely empty", /nobody matching/.test(r.data.reason), r.data.reason);
@@ -842,6 +849,7 @@ console.log("\npeople — directory search");
   // a name-less entry still has to be usable
   __resetFetch();
   __queueFetch({ body: { data: { emails: [{ value: "dev.ops@acme.com", position: "DevOps Engineer", confidence: 88 }] } } });
+  __queueFetch({ body: { data: { emails: [] } } });
   const r = post({ action: "findPeople", token: TOKEN, payload: { company: "Acme", domain: "acme.com", role: "DevOps Engineer" } });
   check("a missing name falls back to the address local-part", r.data.top[0].name === "dev ops", r.data.top[0].name);
 }
@@ -864,6 +872,8 @@ console.log("\npeople — directory search");
   __resetFetch();
   __queueFetch({ body: { data: { emails: [
     { value: "a@acme.com", first_name: "A", last_name: "One", position: "Workplace Services Partner", confidence: 90 },
+  ] } } });
+  __queueFetch({ body: { data: { emails: [
     { value: "b@acme.com", first_name: "B", last_name: "Two", position: "Director of Talent Acquisition", confidence: 90 },
   ] } } });
   const r = post({ action: "findPeople", token: TOKEN, payload: {
@@ -875,9 +885,29 @@ console.log("\npeople — directory search");
   __queueFetch({ body: { data: { emails: [
     { value: "c@acme.com", first_name: "C", last_name: "Three", position: "Senior DevOps Engineer", confidence: 90 },
   ] } } });
+  __queueFetch({ body: { data: { emails: [] } } });
   const r = post({ action: "findPeople", token: TOKEN, payload: {
     company: "Acme", domain: "acme.com", role: "DevOps Engineer" } });
   check("a real match is not flagged weak", r.data.weak === false, r.data.top);
+  P.setProperty("VERIFIER", ""); P.setProperty("VERIFIER_API_KEY", "");
+}
+
+{
+  // the failure this fixes: one engineer and two HR managers in a three-slot slate
+  P.setProperty("VERIFIER", "hunter"); P.setProperty("VERIFIER_API_KEY", "hk");
+  __resetFetch();
+  __queueFetch({ body: { data: { emails: [
+    { value: "j@acme.com", first_name: "Sam", last_name: "Rivera", position: "Senior Software Developer", confidence: 95 },
+  ] } } });
+  __queueFetch({ body: { data: { emails: [
+    { value: "r@acme.com", first_name: "Robin", last_name: "Clarke", position: "Human Resources Manager", confidence: 95 },
+    { value: "s@acme.com", first_name: "Sasha", last_name: "Bell", position: "HR Manager", confidence: 95 },
+  ] } } });
+  const r = post({ action: "findPeople", token: TOKEN, payload: {
+    company: "Acme", domain: "acme.com", role: "DevOps Engineer" } });
+  const recruiters = r.data.top.filter((p) => p.kind === "recruiter");
+  check("never more than one recruiter in the slate", recruiters.length <= 1, r.data.top.map((p) => p.title));
+  check("the engineer keeps the peer slot", r.data.top[0].kind === "peer", r.data.top[0]);
   P.setProperty("VERIFIER", ""); P.setProperty("VERIFIER_API_KEY", "");
 }
 
