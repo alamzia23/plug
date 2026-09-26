@@ -717,6 +717,14 @@ const crowd = [
   check("the shortlist mixes kinds", new Set(kinds).size === kinds.length, kinds);
   check("a peer is picked first", kinds[0] === "peer", kinds);
   check("a recruiter still gets a slot", kinds.indexOf("recruiter") !== -1, kinds);
+  {
+    const lead = post({ action: "rankPeople", token: TOKEN, payload: {
+      people: [{ name: "L", title: "Engineering Manager" }], job: { role: "DevOps Engineer" } } });
+    check("a manager is senior", lead.data.top[0].kind === "senior", lead.data.top[0].kind);
+    const staff = post({ action: "rankPeople", token: TOKEN, payload: {
+      people: [{ name: "S", title: "Staff Platform Engineer" }], job: { role: "DevOps Engineer" } } });
+    check("a staff engineer is still a peer", staff.data.top[0].kind === "peer", staff.data.top[0].kind);
+  }
   check("a VP counts as senior, not a peer",
     [].concat(r.data.top, r.data.rest).find((p) => p.name === "Sam Whitfield").kind === "senior");
   const vp = [].concat(r.data.top, r.data.rest).find((p) => p.name === "Sam Whitfield");
@@ -752,7 +760,8 @@ const crowd = [
       people: [{ name: "Sam Rivera", title: "Senior Software Developer" }],
       job: { role: "DevOps Engineer" } } });
     check("developer matches engineer", r2.data.top[0].reasons.indexOf("same function") !== -1, r2.data.top[0]);
-    check("and a senior developer is a senior, not a peer", r2.data.top[0].kind === "senior", r2.data.top[0].kind);
+    // "Senior" is an IC level, not a leadership one — this is the best person to ask
+    check("a senior developer is a peer", r2.data.top[0].kind === "peer", r2.data.top[0].kind);
   }
   {
     const r3 = post({ action: "rankPeople", token: TOKEN, payload: {
@@ -795,7 +804,8 @@ console.log("\npeople — directory search");
   check("one request per lookup", ds.length === 1);
   // hunter bills per revealed address, so the ask has to stay small by default
   check("asks for a modest number of people", /[?&]limit=10\b/.test(ds[0].url), ds[0].url);
-  check("asks for the right department", /[?&]department=it\b/.test(ds[0].url), ds[0].url);
+  check("asks for the right department", /[?&]department=it(,|%2C)hr\b/.test(ds[0].url), decodeURIComponent(ds[0].url));
+  check("includes hr so a recruiter can fill its slot", /hr/.test(decodeURIComponent(ds[0].url)));
   check("excludes executives from the ask", /seniority=junior,senior/.test(ds[0].url), ds[0].url);
 }
 {

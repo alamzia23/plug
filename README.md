@@ -313,6 +313,13 @@ any:
 | **senior**, same function | lower | highest — their referral carries weight |
 | **recruiter** | dependable | lowest — paid to reply, least incentive to champion you |
 
+"Senior", "Staff" and "Principal" are individual-contributor levels, not leadership —
+a Senior Software Developer is the archetypal peer and the best single person to ask.
+Only `lead`, `manager`, `head`, `director` and above count as senior.
+
+The directory request asks for the role's department **plus `hr`**, because recruiters
+live in HR and filtering to engineering alone makes the recruiter slot unfillable.
+
 If a company has nobody of a given kind, the slot is filled by score rather than left
 empty. Capped at `MAX_CONTACTS_PER_JOB` (3) — three asks at one company is the limit
 before it reads as a mailshot.

@@ -150,9 +150,17 @@ function rankPeople_(payload) {
   };
 }
 
-// Includes SENIOR_WORDS by reference below: a VP of Engineering is same-function
-// and unmistakably not a peer, and omitting "vp" put one in the peer slot.
-var LEADER_WORDS = /\b(senior|sr|staff|principal|lead|leader|manager|head|director|architect)\b/i;
+/**
+ * Words that mean this person leads people — not merely that they are
+ * experienced.
+ *
+ * "Senior", "Staff" and "Principal" are individual-contributor levels: a
+ * Senior Software Developer is the archetypal peer, the single best person to
+ * ask, and treating their title as leadership put them in the wrong slot and
+ * left the peer slot empty. SENIOR_WORDS (vp, chief, head of…) is checked
+ * alongside this.
+ */
+var LEADER_WORDS = /\b(lead|leader|manager|managing|head|director|architect)\b/i;
 
 /**
  * Which bet this person represents. They pay off differently, which is the

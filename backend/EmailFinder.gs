@@ -339,7 +339,11 @@ function hunterDomainSearch_(domain, limit, role) {
     // Ask for the right people rather than filtering afterwards: a filtered
     // request spends credits on candidates worth ranking, an unfiltered one
     // spends them on whoever Hunter happens to know.
+    // Recruiters live in hr, so filtering to the role's own department alone
+    // makes the recruiter slot unfillable. Asking for both in one request
+    // costs one call rather than two.
     var department = departmentFor_(role);
+    if (department && department !== 'hr') department = department + ',hr';
     var url =
       'https://api.hunter.io/v2/domain-search?domain=' + encodeURIComponent(domain) +
       '&limit=' + want +
