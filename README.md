@@ -6,9 +6,8 @@ A personal referral agent: capture a job page, find the right people at that com
 draft a personal referral email + tailored resume, send it from your Gmail after you
 approve, and follow up automatically.
 
-Status: **all 7 days built.** Sending stays in dry run until you turn `DRY_RUN` off yourself. Every email goes to your test inbox until you
-turn `DRY_RUN` off yourself. Nothing sends mail yet; captured jobs
-sync to a Google Sheet you own.
+Status: **all 7 days built.** Every email goes to your own test inbox until you turn
+`DRY_RUN` off in the Sheet yourself.
 
 ## Load the extension
 
@@ -46,8 +45,10 @@ You need this once. It takes about five minutes.
    `Api.gs`, `Sheet.gs` and `Setup.gs` by hand.
 
 2. In the Apps Script editor, pick **setUp** in the function dropdown and hit **Run**.
-   Grant the scopes it asks for. The execution log prints your **sheet url** and your
-   **token** — keep the token, you'll need it in step 4. (`showToken()` prints it again.)
+   Grant the scopes it asks for. The execution log prints your **sheet url**; the token
+   is in **Project Settings → Script Properties → `PLUG_TOKEN`**. It is deliberately not
+   logged — execution logs get pasted into chat and screenshots, and that token is the
+   only thing guarding a public endpoint. `rotateToken()` replaces it if it leaks.
 
 3. **Deploy → New deployment → Web app**, with:
    - *Execute as*: **Me**
@@ -69,8 +70,8 @@ column names to object keys, so adding a column later won't break old rows.
 | tab | holds |
 | --- | --- |
 | `jobs` | one row per captured posting, upserted by url |
-| `contacts` | day 7 |
-| `outreach` | day 4 |
+| `contacts` | people found for a job |
+| `outreach` | one row per send, with `dry_run` and `real_to` |
 | `settings` | `DRY_RUN` (starts `true`), `TEST_INBOX`, `DAILY_CAP`, caps |
 
 ### Testing the backend without deploying
