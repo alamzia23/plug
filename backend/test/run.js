@@ -769,8 +769,18 @@ console.log("\npeople — directory search");
   check("high confidence is verified", priya.email_status === "verified", priya);
   const sam = r.data.top.find((p) => p.name === "Sam Whitfield");
   check("71% stays unverified", sam.email_status === "unverified", sam);
-  check("one credit for the whole company",
-    __fetchLog.filter((c) => c.url.indexOf("domain-search") !== -1).length === 1);
+  const ds = __fetchLog.filter((c) => c.url.indexOf("domain-search") !== -1);
+  check("one request per lookup", ds.length === 1);
+  // hunter bills per revealed address, so the ask has to stay small by default
+  check("asks for a modest number of people", /[?&]limit=10\b/.test(ds[0].url), ds[0].url);
+}
+{
+  setSetting_("DIRECTORY_LIMIT", "3");
+  __resetFetch(); __queueFetch({ body: { data: { emails: [] } } });
+  post({ action: "findPeople", token: TOKEN, payload: { company: "Acme", domain: "acme.com" } });
+  const ds2 = __fetchLog.filter((c) => c.url.indexOf("domain-search") !== -1);
+  check("DIRECTORY_LIMIT is respected", /[?&]limit=3\b/.test(ds2[0].url), ds2[0].url);
+  setSetting_("DIRECTORY_LIMIT", "10");
 }
 {
   // hunter knows the domain but lists nobody

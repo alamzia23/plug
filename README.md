@@ -253,9 +253,18 @@ isn't installed.
 
 **With Hunter configured it finds people on its own.** `findPeople` resolves the
 company's domain and asks Hunter's Domain Search who works there — names, titles and
-addresses, no page to open and no LinkedIn involved. One search credit per *company*,
-not per person, so a company with twenty engineers costs the same as one with two.
-Addresses come back attached, so the `find` step is already done.
+addresses, no page to open and no LinkedIn involved. Addresses come back attached, so
+the `find` step is already done.
+
+**Hunter charges one credit per revealed address**, not per company. A free plan is
+about 50 a month, so a lookup asking for 25 people could cost half a month in one
+click — and only `MAX_CONTACTS_PER_JOB` of them ever get used. `DIRECTORY_LIMIT`
+(default 10) caps it; lower it to 5 if you're rationing.
+
+**The domain often isn't the one in the url.** A job on `careers.capgemini.com` can be
+a Sogeti role, and `sogeti.com` is where those people are listed. When the directory
+comes back empty the panel offers a domain field, and a correction that works is
+remembered for that job.
 
 When there's no key, nobody listed, or the quota is spent, it falls back to reading
 whatever page you have open:

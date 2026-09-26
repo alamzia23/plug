@@ -296,11 +296,14 @@ function hunterFind_(domain, fullName) {
  *
  * This is the only route to finding people without crawling LinkedIn: give it
  * a domain and it returns names, titles and addresses it has already observed.
- * One search credit per company, not per person, so a company with twenty
- * engineers costs the same as one with two.
  *
- * Returns [] rather than throwing — no key, no coverage and a rate limit all
- * mean the same thing to the caller: fall back to reading a page.
+ * CREDITS ARE PER REVEALED ADDRESS, not per company. Asking for 25 people can
+ * therefore cost 25 of a 50-a-month allowance in a single click, and we only
+ * ever use MAX_CONTACTS_PER_JOB of them. The limit is deliberately small and
+ * tunable — a wide net here is someone's whole month.
+ *
+ * Returns an empty list rather than throwing — no key, no coverage and a rate
+ * limit all mean the same thing to the caller: fall back to reading a page.
  */
 function hunterDomainSearch_(domain, limit) {
   var cfg = verifierConfig_();
@@ -308,10 +311,13 @@ function hunterDomainSearch_(domain, limit) {
     return { people: [], reason: 'no directory key configured' };
   }
 
+  // Enough to rank meaningfully, few enough that a click can't empty a month.
+  var want = limit || numSetting_('DIRECTORY_LIMIT', 10);
+
   try {
     var url =
       'https://api.hunter.io/v2/domain-search?domain=' + encodeURIComponent(domain) +
-      '&limit=' + (limit || 25) +
+      '&limit=' + want +
       '&api_key=' + encodeURIComponent(cfg.key);
     var res = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
     var raw = res.getContentText();
@@ -350,7 +356,7 @@ function hunterDomainSearch_(domain, limit) {
     return {
       people: people,
       reason: people.length
-        ? people.length + ' listed'
+        ? people.length + ' of ' + want + ' requested'
         : 'hunter has no addresses on record for ' + domain,
     };
   } catch (err) {

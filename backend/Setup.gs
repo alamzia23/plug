@@ -39,6 +39,7 @@ function setUp() {
   seed_('DAILY_CAP', '25', 'max outreach emails per day');
   seed_('MAX_CONTACTS_PER_JOB', '3', '');
   seed_('MAX_FOLLOWUPS', '2', 'per contact, after the first email');
+  seed_('DIRECTORY_LIMIT', '10', 'people fetched per company lookup — hunter charges per revealed address');
 
   // The token is deliberately NOT logged. Execution logs get copied whole into
   // chat, screenshots and bug reports, and this token is the only thing guarding
