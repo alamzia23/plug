@@ -255,7 +255,15 @@ function wireDraft(node, job) {
 
         const why = document.createElement("span");
         why.className = "why";
-        why.textContent = p.reasons.length ? p.reasons.join(" · ") : "no strong signal";
+        // Name the bet each person represents. A portfolio nobody can see just
+        // reads as an arbitrary list of three strangers.
+        const KIND = {
+          peer: "peer — likeliest to reply",
+          senior: "senior — carries the most weight",
+          recruiter: "recruiter — paid to reply",
+        };
+        const bits = [KIND[p.kind], ...(p.reasons || [])].filter(Boolean);
+        why.textContent = bits.length ? bits.join(" · ") : "no strong signal";
 
       b.append(who, why);
       b.addEventListener("click", () => pickPerson(p));
