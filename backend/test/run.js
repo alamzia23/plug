@@ -694,5 +694,87 @@ console.log("\ntrigger + tracker");
   check("tracker hides sheet row numbers", t.rows.every((r) => r._row === undefined));
 }
 
+console.log("\npeople — ranking");
+const crowd = [
+  { name: "Ravi Menon", title: "Technical Recruiter at Acme", degree: "3rd" },
+  { name: "Priya Raman", title: "Senior Frontend Engineer at Acme", degree: "2nd" },
+  { name: "Sam Whitfield", title: "VP of Engineering at Acme", degree: "2nd" },
+  { name: "Asha Kapoor", title: "Frontend Engineer, NIT Trichy alum", degree: "2nd" },
+  { name: "No Title Person", title: "", degree: "" },
+];
+{
+  const r = post({ action: "rankPeople", token: TOKEN, payload: {
+    people: crowd, job: { role: "Senior Frontend Engineer", company: "Acme" } } });
+  check("ranks people", r.ok === true, r.error);
+  const names = r.data.top.map((p) => p.name);
+  check("caps at MAX_CONTACTS_PER_JOB", r.data.top.length === 3, r.data.top.length);
+  check("alumni ranks first", names[0] === "Asha Kapoor", names);
+  check("same-function engineer beats the recruiter",
+    names.indexOf("Priya Raman") < names.indexOf("Ravi Menon") || names.indexOf("Ravi Menon") === -1, names);
+  const vp = [].concat(r.data.top, r.data.rest).find((p) => p.name === "Sam Whitfield");
+  check("a VP is marked too senior", vp.reasons.indexOf("probably too senior") !== -1, vp.reasons);
+  const recruiter = [].concat(r.data.top, r.data.rest).find((p) => p.name === "Ravi Menon");
+  check("recruiter is recognised", recruiter.reasons.indexOf("recruiter") !== -1, recruiter.reasons);
+  // the stems have to match real titles, not just the bare verb
+  ["Technical Recruiter", "Recruiting Lead", "Talent Partner", "Sourcer", "Head of People Ops"].forEach((t) => {
+    const one = post({ action: "rankPeople", token: TOKEN, payload: {
+      people: [{ name: "X", title: t }], job: { role: "Engineer" } } }).data.top[0];
+    check('"' + t + '" reads as a recruiter', one.reasons.indexOf("recruiter") !== -1, one.reasons);
+  });
+  const blank = [].concat(r.data.top, r.data.rest).find((p) => p.name === "No Title Person");
+  check("no title is penalised, not dropped", blank.reasons.indexOf("no title visible") !== -1, blank.reasons);
+  check("every ranked person says why", r.data.top.every((p) => Array.isArray(p.reasons)));
+  check("overflow kept separately", r.data.rest.length === 2, r.data.rest.length);
+}
+{
+  // the job's own words should drive "same function", not a fixed list
+  const r = post({ action: "rankPeople", token: TOKEN, payload: {
+    people: [
+      { name: "Data Person", title: "Data Engineer at Acme" },
+      { name: "Front Person", title: "Frontend Engineer at Acme" },
+    ],
+    job: { role: "Data Engineer" } } });
+  check("ranking follows the job title", r.data.top[0].name === "Data Person", r.data.top.map((p) => p.name));
+}
+{
+  // "Senior" and "Lead" are noise — they shouldn't create a false match
+  check("seniority words are stripped from the role",
+    roleKeywords_("Senior Staff Lead Frontend Engineer II").join(",") === "frontend,engineer",
+    roleKeywords_("Senior Staff Lead Frontend Engineer II"));
+}
+{
+  const empty = post({ action: "rankPeople", token: TOKEN, payload: { people: [], job: {} } });
+  check("refuses an empty list", /no people to rank/.test(empty.error), empty.error);
+}
+
+console.log("\npeople — connection note");
+{
+  P.setProperty("LLM_PROVIDER", "gemini"); P.setProperty("LLM_API_KEY", "test-key");
+  __resetFetch();
+  __queueFetch({ body: { candidates: [{ content: { parts: [{ text: '{"note":"Hi Priya, I am applying to the Senior Frontend Engineer role at Acme. I built the design system at Nutmeg Pay, which looks close to what your team owns. Would be glad to connect."}' }] } }] } });
+  const r = post({ action: "connectionNote", token: TOKEN, payload: {
+    person: { name: "Priya Raman", title: "Senior Frontend Engineer" },
+    job: { role: "Senior Frontend Engineer", company: "Acme" } } });
+  check("writes a note", r.ok === true, r.error);
+  check("under linkedin's limit", r.data.chars <= 280, r.data.chars);
+  check("not truncated when it already fits", r.data.truncated === false);
+  const system = __fetchLog[0].body.systemInstruction.parts[0].text;
+  check("the limit is in the prompt", /UNDER 280 characters/.test(system));
+  check("it must not ask for the referral in a connection note", /Do not ask for the referral/.test(system));
+}
+{
+  // a model that ignores the limit gets cut, and says so
+  __resetFetch();
+  __queueFetch({ body: { candidates: [{ content: { parts: [{ text: JSON.stringify({ note: "x".repeat(400) }) }] } }] } });
+  const r = post({ action: "connectionNote", token: TOKEN, payload: {
+    person: { name: "Priya" }, job: { role: "Engineer" } } });
+  check("an over-long note is cut to 280", r.data.note.length === 280, r.data.note.length);
+  check("and flagged as truncated", r.data.truncated === true);
+}
+{
+  const noPerson = post({ action: "connectionNote", token: TOKEN, payload: { person: {}, job: {} } });
+  check("refuses without a person", /need a person/.test(noPerson.error), noPerson.error);
+}
+
 console.log(`\n${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);

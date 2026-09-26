@@ -6,7 +6,7 @@ A personal referral agent: capture a job page, find the right people at that com
 draft a personal referral email + tailored resume, send it from your Gmail after you
 approve, and follow up automatically.
 
-Status: **day 6 done — replies and follow-ups.** Every email goes to your test inbox until you
+Status: **all 7 days built.** Sending stays in dry run until you turn `DRY_RUN` off yourself. Every email goes to your test inbox until you
 turn `DRY_RUN` off yourself. Nothing sends mail yet; captured jobs
 sync to a Google Sheet you own.
 
@@ -249,6 +249,50 @@ turns it off.
 The panel shows a tracker: a streak, a count per status, and a warning when the trigger
 isn't installed.
 
+## Finding the right person (day 7)
+
+`content/people.js` reads whoever is already visible on the page — a LinkedIn people
+search, a LinkedIn job page's "people you can reach out to", or a Google
+`site:linkedin.com/in` search. It is anchored on `/in/` profile links rather than class
+names, because LinkedIn rewrites its markup constantly and every `/in/` link is a person.
+
+**It only reads.** It never opens a profile, never sends a message, and never sends a
+connection request. A connection request from a script is one you didn't write.
+
+`People.gs` ranks them, because ranking needs the resume and the resume shouldn't be
+shipped to the browser:
+
+| signal | weight | why |
+| --- | --- | --- |
+| shared school | +50 | the strongest opener a stranger has |
+| same function | +30 and up | they can judge whether the work matches; a recruiter can't |
+| 1st / 2nd degree | +35 / +20 | a warm path |
+| recruiter | +10 | last, not first — they get the most of these and have the least incentive |
+| VP and above | −15 | a VP forwarding you to a recruiter is worth less than a peer clicking refer |
+
+Capped at `MAX_CONTACTS_PER_JOB` (3). Three asks at one company is the limit before it
+reads as a mailshot.
+
+Picking someone generates a **LinkedIn connection note** under 280 characters, which you
+copy and send yourself. It deliberately doesn't ask for the referral — the note is to
+connect; the ask comes after.
+
+## End-to-end, in dry run
+
+The whole loop, with nothing able to reach a stranger:
+
+1. Open a job posting → **capture this job**
+2. Open a LinkedIn or Google people search for that company → **who?** → pick someone
+3. Copy the connection note if you want it; send it yourself
+4. **find** → resolves their work address, with a status
+5. **write the email** → a referral ask under 120 words, tied to the JD and your resume
+6. Edit anything. **send · dry run** → lands in your own inbox, subject prefixed
+   `[DRY RUN → their@address]`
+7. Check the `outreach` tab: `dry_run` is `true`, `to_email` is you, `real_to` is them
+8. Reply to that email yourself → next morning the trigger marks it `replied`
+
+To go live, set `DRY_RUN` to `false` in the `settings` tab. Nothing else changes.
+
 ## The site (`site/`)
 
 The public landing page and blog, built with **Astro 5** — static output, zero JS by
@@ -290,6 +334,7 @@ backend/
   Mail.gs                # the only path to gmail: dry run, caps, outreach log
   EmailFinder.gs         # domain + pattern guessing, optional verification
   Followups.gs           # daily reply check, nudges, ghosting, tracker
+  People.gs              # rank who to ask, write the connection note
   Llm.gs                 # provider-neutral prompts + parsing
   Resume.gs              # dummy master resume
   Setup.gs               # setUp(): makes the sheet, token and defaults
@@ -310,7 +355,7 @@ Selectors were run against real postings, not guessed:
 
 ## Known gaps (day 1)
 
-- No people finder yet. Day 7.
+- The master resume in `backend/Resume.gs` is still dummy data. Swap it for yours.
 - The contact is dummy data (`priya raman`), editable per card, until the people finder
   lands on day 7.
 - Drafts live in `chrome.storage.local`, not the Sheet. Day 4 logs sends to `outreach`.

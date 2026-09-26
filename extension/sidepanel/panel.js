@@ -166,6 +166,130 @@ function wireDraft(node, job) {
     paintSendState();
   };
 
+  // ---- who to ask ----
+
+  const btnPeople = node.querySelector(".d-people");
+  const peopleNote = node.querySelector(".people-note");
+  const peopleList = node.querySelector(".people-list");
+  const noteBox = node.querySelector(".note-box");
+  const noteArea = node.querySelector(".d-note");
+  const noteChars = node.querySelector(".note-chars");
+  const noteCopy = node.querySelector(".d-note-copy");
+
+  const pickPerson = async (p) => {
+    const target = jobs.find((j) => j.id === job.id);
+    if (!target) return;
+    target.contact = {
+      ...(target.contact || DUMMY_CONTACT),
+      name: p.name,
+      title: p.title,
+      profileUrl: p.profileUrl,
+      // a new person means the old address is meaningless
+      email: "",
+      email_status: "",
+    };
+    await saveJobs();
+    node.querySelector('[data-contact="name"]').value = p.name;
+    node.querySelector('[data-contact="title"]').value = p.title;
+    toInput.value = "";
+    findNote.textContent = "";
+    findNote.dataset.status = "";
+    guesses.hidden = true;
+    peopleList.hidden = true;
+
+    // The note is theirs to send. plug never sends it — reading a page is the
+    // only thing this extension does on linkedin.
+    peopleNote.textContent = "writing a connection note…";
+    peopleNote.dataset.tone = "ok";
+    try {
+      const res = await callBackend("connectionNote", {
+        person: { name: p.name, title: p.title },
+        job: { role: target.role, company: target.company },
+      });
+      noteBox.hidden = false;
+      noteArea.value = res.note;
+      noteChars.textContent = `${res.chars}/280 · copy it, send it yourself`;
+      peopleNote.textContent = `${p.name} · ${p.title || "no title"}`;
+    } catch (err) {
+      peopleNote.textContent = "note failed: " + (err.message || err);
+      peopleNote.dataset.tone = "bad";
+    }
+  };
+
+  noteCopy.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(noteArea.value);
+      noteCopy.textContent = "copied";
+      setTimeout(() => { noteCopy.textContent = "copy"; }, 1500);
+    } catch {
+      noteArea.select();
+      noteCopy.textContent = "select + ⌘c";
+    }
+  });
+
+  btnPeople.addEventListener("click", async () => {
+    const target = jobs.find((j) => j.id === job.id);
+    if (!target) return;
+
+    btnPeople.disabled = true;
+    btnPeople.textContent = "reading…";
+    peopleList.hidden = true;
+    peopleNote.dataset.tone = "ok";
+    peopleNote.textContent = "";
+
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (!tab || !/^https?:/.test(tab.url || "")) {
+        throw new Error("open a linkedin people search or a google search first");
+      }
+
+      const [frame] = await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        files: ["content/people.js"],
+      });
+      const res = frame && frame.result;
+      if (!res || !res.ok) throw new Error((res && res.error) || "couldn't read that page");
+
+      const ranked = await callBackend("rankPeople", {
+        people: res.people,
+        job: { role: target.role, company: target.company },
+      });
+
+      peopleList.replaceChildren();
+      for (const p of ranked.top) {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "person";
+
+        const who = document.createElement("div");
+        who.className = "who";
+        const nm = document.createElement("span");
+        nm.className = "pname";
+        nm.textContent = p.name;
+        const ti = document.createElement("span");
+        ti.className = "ptitle";
+        ti.textContent = p.title || "no title visible";
+        who.append(nm, ti);
+
+        const why = document.createElement("span");
+        why.className = "why";
+        why.textContent = p.reasons.length ? p.reasons.join(" · ") : "no strong signal";
+
+        b.append(who, why);
+        b.addEventListener("click", () => pickPerson(p));
+        peopleList.append(b);
+      }
+      peopleList.hidden = false;
+      peopleNote.textContent = `read ${res.people.length} profiles on that page. best ${ranked.top.length}:`;
+    } catch (err) {
+      peopleNote.dataset.tone = "bad";
+      peopleNote.textContent = err.message || String(err);
+    } finally {
+      btnPeople.disabled = false;
+      btnPeople.textContent = "who?";
+    }
+  });
+
   btnFind.addEventListener("click", async () => {
     const target = jobs.find((j) => j.id === job.id);
     if (!target) return;

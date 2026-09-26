@@ -37,6 +37,12 @@ var ROUTES = {
   tracker: function () {
     return tracker_();
   },
+  rankPeople: function (payload) {
+    return rankPeople_(payload);
+  },
+  connectionNote: function (payload) {
+    return connectionNote_(payload);
+  },
   runFollowups: function () {
     return dailyReplyCheck();
   },

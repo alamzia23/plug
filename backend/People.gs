@@ -1,0 +1,170 @@
+/**
+ * plug — deciding who to ask.
+ *
+ * The extension reads whoever is visible; this decides which of them is worth
+ * emailing. Ranking lives here because it needs the resume, and the resume
+ * should not be shipped to the browser.
+ *
+ * The ordering reflects who actually says yes: someone who shares a specific
+ * thing with you, then someone on the team, then a recruiter. Recruiters come
+ * last, not first — they get the most of these and have the least incentive to
+ * pass one along.
+ */
+
+// \w* on the stems: \brecruit\b does not match "recruiter", which is the word
+// almost every one of these people actually has in their title.
+var RECRUITER_WORDS = /\b(recruit\w*|talent|sourc\w*|staffing|hiring|people ops|peopleops|hr|human resources)\b/i;
+var SENIOR_WORDS = /\b(vp|vice president|chief|cto|ceo|cfo|coo|head of|director|president)\b/i;
+
+/** Words in the job title that say something, once the noise is dropped. */
+function roleKeywords_(role) {
+  var stop = /\b(senior|sr|junior|jr|staff|principal|lead|i|ii|iii|the|and|of|at|for|remote|full|time|intern)\b/gi;
+  return String(role || '')
+    .toLowerCase()
+    .replace(stop, ' ')
+    .replace(/[^a-z\s]/g, ' ')
+    .split(/\s+/)
+    .filter(function (w) { return w.length > 2; });
+}
+
+function scorePerson_(person, job, resume) {
+  var title = String(person.title || '').toLowerCase();
+  var reasons = [];
+  var score = 0;
+
+  // A shared school is the strongest opener a stranger can have.
+  var schools = (resume.education || []).map(function (e) {
+    return String(e.school || '').toLowerCase();
+  }).filter(Boolean);
+  var alumni = schools.some(function (s) {
+    return s && title.indexOf(s) !== -1;
+  });
+  if (alumni) {
+    score += 50;
+    reasons.push('alumni');
+  }
+
+  // Same function: they can judge whether the work matches, which a recruiter can't.
+  var keywords = roleKeywords_(job.role);
+  var overlap = keywords.filter(function (k) { return title.indexOf(k) !== -1; });
+  if (overlap.length) {
+    score += 30 + overlap.length * 5;
+    reasons.push('same function');
+  }
+
+  if (person.degree === '2nd') {
+    score += 20;
+    reasons.push('2nd degree');
+  } else if (person.degree === '1st') {
+    score += 35;
+    reasons.push('1st degree');
+  }
+
+  if (RECRUITER_WORDS.test(title)) {
+    score += 10;
+    reasons.push('recruiter');
+  }
+
+  // A VP forwarding your email to a recruiter is worth less than a peer
+  // clicking the referral button.
+  if (SENIOR_WORDS.test(title)) {
+    score -= 15;
+    reasons.push('probably too senior');
+  }
+
+  if (!title) {
+    score -= 10;
+    reasons.push('no title visible');
+  }
+
+  return { score: score, reasons: reasons };
+}
+
+/**
+ * payload: { people: [...], job: { role, company } }
+ * Returns them ranked, capped at MAX_CONTACTS_PER_JOB.
+ */
+function rankPeople_(payload) {
+  var people = (payload && payload.people) || [];
+  if (!people.length) throw new Error('no people to rank');
+
+  var job = payload.job || {};
+  var resume = MASTER_RESUME;
+  var cap = numSetting_('MAX_CONTACTS_PER_JOB', 3);
+
+  var ranked = people
+    .filter(function (p) { return p && p.name; })
+    .map(function (p) {
+      var s = scorePerson_(p, job, resume);
+      return {
+        name: p.name,
+        title: p.title || '',
+        degree: p.degree || '',
+        profileUrl: p.profileUrl || '',
+        score: s.score,
+        reasons: s.reasons,
+      };
+    })
+    .sort(function (a, b) { return b.score - a.score; });
+
+  return {
+    // The cap is a rule, not a suggestion: three asks at one company is the
+    // limit before it reads as a mailshot.
+    top: ranked.slice(0, cap),
+    rest: ranked.slice(cap),
+    cap: cap,
+  };
+}
+
+var NOTE_SYSTEM = [
+  'Write a LinkedIn connection note.',
+  '',
+  'Hard rules:',
+  '- UNDER 280 characters. LinkedIn will not accept more.',
+  '- One specific reason you are reaching out to THIS person.',
+  '- Mention the role by name.',
+  '- No buzzwords, no flattery, no exclamation marks, no emoji.',
+  '- Do not ask for the referral here. The note is to connect; the ask comes after.',
+  '',
+  'Answer with JSON only: {"note": "..."}',
+].join('\n');
+
+/**
+ * A note the user sends themselves. Never sent by plug — hard rule, and the
+ * right one: a connection request from a script is one the user didn't write.
+ */
+function connectionNote_(payload) {
+  var person = payload.person || {};
+  var job = payload.job || {};
+  if (!person.name) throw new Error('need a person to write to');
+
+  var out = llmComplete_({
+    system: NOTE_SYSTEM,
+    user: [
+      'THEM',
+      'name: ' + person.name,
+      'title: ' + (person.title || 'unknown'),
+      '',
+      'THE ROLE I AM AFTER',
+      (job.role || 'unknown') + ' at ' + (job.company || 'unknown'),
+      '',
+      'ME',
+      MASTER_RESUME.name + ', ' + MASTER_RESUME.headline,
+      'skills: ' + (MASTER_RESUME.skills || []).slice(0, 6).join(', '),
+    ].join('\n'),
+    maxTokens: 1200,
+    temperature: 0.7,
+    json: true,
+  });
+
+  var note = String(parseJsonLoose_(out.text).note || '').trim();
+  if (!note) throw new Error('model returned an empty note');
+
+  return {
+    note: note.slice(0, 280),
+    chars: Math.min(note.length, 280),
+    truncated: note.length > 280,
+    provider: out.provider,
+    model: out.model,
+  };
+}
