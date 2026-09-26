@@ -49,9 +49,16 @@ async function callBackend(action, payload = {}) {
     // until you read the title.
     const title = (text.match(/<title[^>]*>([^<]*)<\/title>/i) || [])[1] || "";
     const detail = title.trim() || text.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 120);
-    console.warn("[plug] non-json response", { status: res.status, url: res.url, head: text.slice(0, 400) });
+    // One string, not an object: chrome's extension Errors page prints
+    // "[object Object]" for the latter, which is where this actually gets read.
+    console.warn(
+      "[plug] non-json response | action=" + action +
+      " | status=" + res.status +
+      " | url=" + res.url +
+      " | body=" + text.slice(0, 300).replace(/\s+/g, " ")
+    );
     throw new Error(
-      "backend returned a page, not json (" + res.status + "): " + detail + " — see console for the full response"
+      "backend returned a page, not json — " + action + " got " + res.status + ": " + detail
     );
   }
 
