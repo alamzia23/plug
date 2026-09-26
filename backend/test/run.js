@@ -777,12 +777,15 @@ console.log("\npeople — directory search");
   __resetFetch(); __queueFetch({ body: { data: { emails: [] } } });
   const r = post({ action: "findPeople", token: TOKEN, payload: { company: "Acme", domain: "acme.com" } });
   check("an empty directory is reported, not an error", r.ok === true && r.data.source === "hunter-empty", r.data);
+  check("and says the listing was genuinely empty", /no addresses on record/.test(r.data.reason), r.data.reason);
   check("and returns no one rather than inventing anyone", r.data.top.length === 0);
 }
 {
   __resetFetch(); __queueFetch({ code: 429, body: { errors: [{ details: "rate limited" }] } });
   const r = post({ action: "findPeople", token: TOKEN, payload: { company: "Acme", domain: "acme.com" } });
   check("a rate limit degrades to empty, not a crash", r.ok === true && r.data.top.length === 0, r.data);
+  check("a refused request is not reported as an empty company",
+    /http 429/.test(r.data.reason) && !/no addresses on record/.test(r.data.reason), r.data.reason);
 }
 {
   P.setProperty("VERIFIER", ""); P.setProperty("VERIFIER_API_KEY", "");

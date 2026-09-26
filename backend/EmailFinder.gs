@@ -304,7 +304,9 @@ function hunterFind_(domain, fullName) {
  */
 function hunterDomainSearch_(domain, limit) {
   var cfg = verifierConfig_();
-  if (cfg.name !== 'hunter' || !cfg.key || !domain) return [];
+  if (cfg.name !== 'hunter' || !cfg.key || !domain) {
+    return { people: [], reason: 'no directory key configured' };
+  }
 
   try {
     var url =
@@ -312,10 +314,20 @@ function hunterDomainSearch_(domain, limit) {
       '&limit=' + (limit || 25) +
       '&api_key=' + encodeURIComponent(cfg.key);
     var res = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
-    if (res.getResponseCode() !== 200) return [];
+    var raw = res.getContentText();
 
-    var data = (JSON.parse(res.getContentText()) || {}).data || {};
-    return (data.emails || [])
+    // An empty list and a refused request look identical to the caller unless
+    // the reason travels with it — "nobody works there" and "your quota is
+    // spent" need completely different responses from the user.
+    if (res.getResponseCode() !== 200) {
+      return {
+        people: [],
+        reason: 'hunter http ' + res.getResponseCode() + ': ' + errorMessage_(raw).slice(0, 160),
+      };
+    }
+
+    var data = (JSON.parse(raw) || {}).data || {};
+    var people = (data.emails || [])
       .filter(function (e) { return e && e.value; })
       .map(function (e) {
         var name = [e.first_name, e.last_name].filter(Boolean).join(' ');
@@ -334,8 +346,15 @@ function hunterDomainSearch_(domain, limit) {
           source: 'hunter',
         };
       });
+
+    return {
+      people: people,
+      reason: people.length
+        ? people.length + ' listed'
+        : 'hunter has no addresses on record for ' + domain,
+    };
   } catch (err) {
-    return [];
+    return { people: [], reason: 'hunter failed: ' + err };
   }
 }
 
@@ -351,12 +370,14 @@ function findPeople_(payload) {
 
   if (!resolved.domain) throw new Error("couldn't work out the company's domain — type one in");
 
-  var people = hunterDomainSearch_(resolved.domain);
+  var lookup = hunterDomainSearch_(resolved.domain);
+  var people = lookup.people;
   if (!people.length) {
     return {
       domain: resolved.domain,
       domainSource: resolved.source,
       source: verifierConfig_().name === 'hunter' ? 'hunter-empty' : 'no-directory',
+      reason: lookup.reason,
       top: [],
       rest: [],
     };
@@ -380,6 +401,7 @@ function findPeople_(payload) {
     domain: resolved.domain,
     domainSource: resolved.source,
     source: 'hunter',
+    reason: lookup.reason,
     found: people.length,
     top: rejoin(ranked.top),
     rest: rejoin(ranked.rest),

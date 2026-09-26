@@ -320,10 +320,7 @@ function wireDraft(node, job) {
     }
 
     if (!why && directory) {
-      why =
-        directory.source === "no-directory"
-          ? "no directory key configured"
-          : `nobody listed for ${directory.domain}`;
+      why = directory.reason || `nobody listed for ${directory.domain}`;
     }
 
     peopleNote.textContent = why + " — reading the open tab instead…";
