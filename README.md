@@ -167,11 +167,32 @@ company name (`Acme Technologies Pvt Ltd` → `acme`) and probes `.com`, `.io`, 
 `first_last`. Titles (`Dr.`) and suffixes (`PhD`) are stripped, since neither appears in
 an address.
 
-**Verification** uses Hunter's free tier if `HUNTER_API_KEY` is in Script Properties.
-Only the top candidate is checked — the free tier is ~25/month and six checks per
-person would empty it in four contacts. Anything that isn't a clear `valid` stays
-`unverified`; `accept_all` is not a yes. With no key configured, everything is
-`unverified`, which is honest rather than broken.
+**Verification happens in two layers.**
+
+*Free, always on, no signup:* an MX lookup over DNS-over-HTTPS (`dns.google`). Apps
+Script has no sockets so a real SMTP probe is impossible, but a domain with no MX
+records cannot receive mail from anyone — which makes every pattern guess against it
+wrong. That's the most common way address guessing fails and it costs nothing to rule
+out. A failed lookup returns `unknown`, never `no`: "the lookup broke" must not be
+mistaken for "this domain rejects mail".
+
+*Optional, needs a key:* a mailbox check, and the only thing that can return
+`verified`. The adapters live in a `VERIFIERS` map with the same shape as the LLM
+providers — nothing above it knows which service answered.
+
+| Script Property | values |
+| --- | --- |
+| `VERIFIER` | `abstract` · `mailboxlayer` · `hunter` |
+| `VERIFIER_API_KEY` | that service's key |
+
+**Hunter refuses free email addresses at signup**, so on a Gmail-only account use
+`abstract` ([app.abstractapi.com](https://app.abstractapi.com), 100/month free) or
+`mailboxlayer`. Skipping it entirely is fine too — you just confirm each live send.
+
+Only the top candidate is checked, because free tiers are small and six checks per
+person would empty one in four contacts. A maybe is always `unverified`: catch-all
+domains, greylisting and rate limits all look like uncertainty, and none of them are
+permission to email a stranger.
 
 **The gate.** `Mail.gs` refuses to send to an `unverified` address on a live send
 without an explicit override. Typing an address by hand counts as vouching for it.

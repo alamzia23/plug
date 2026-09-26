@@ -367,7 +367,8 @@ console.log("\nemail finder — statuses");
   const r = post({ action: "findEmail", token: TOKEN, payload: {
     name: "Priya Raman", company: "Acme", domain: "acme.com" } });
   check("a valid verdict verifies the top guess", r.data.best.status === "verified", r.data.best);
-  check("only the top candidate is checked", __fetchLog.length === 1, __fetchLog.length);
+  const verifierCalls = __fetchLog.filter((c) => c.url.indexOf("dns.google") === -1);
+  check("only the top candidate is checked", verifierCalls.length === 1, verifierCalls.length);
   check("the rest stay unverified", r.data.candidates.slice(1).every((c) => c.status === "unverified"));
   check("typed domain is used as-is", r.data.domainSource === "you typed it");
 }
@@ -394,6 +395,77 @@ console.log("\nemail finder — statuses");
 {
   const noName = post({ action: "findEmail", token: TOKEN, payload: { company: "Acme" } });
   check("refuses without a name", /need a contact name/.test(noName.error), noName.error);
+}
+
+console.log("\nemail finder — mx layer (free, no key)");
+{
+  P.setProperty("VERIFIER", ""); P.setProperty("VERIFIER_API_KEY", ""); P.setProperty("HUNTER_API_KEY", "");
+  __resetFetch(); __queueMx({ Status: 0, Answer: [] }); // domain exists, accepts no mail
+  const r = post({ action: "findEmail", token: TOKEN, payload: { name: "Priya Raman", domain: "acme.com" } });
+  check("a domain with no MX is invalid, not a guess", r.data.best.status === "invalid", r.data.best);
+  check("says why in plain words", /does not accept email/.test(r.data.best.reason), r.data.best.reason);
+}
+{
+  __resetFetch(); __queueMx({ Status: 3 }); // NXDOMAIN
+  const r = post({ action: "findEmail", token: TOKEN, payload: { name: "Priya Raman", domain: "nope.invalid" } });
+  check("a domain that doesn't exist is invalid", r.data.best.status === "invalid", r.data.best);
+}
+{
+  __resetFetch();
+  const r = post({ action: "findEmail", token: TOKEN, payload: { name: "Priya Raman", domain: "acme.com" } });
+  check("mx present but no key stays unverified", r.data.best.status === "unverified", r.data.best);
+  check("and says the mailbox is what's unchecked", /mailbox unchecked/.test(r.data.best.reason), r.data.best.reason);
+  check("reports mx-only mode", r.data.verifier === "none (mx check only)", r.data.verifier);
+}
+{
+  // a failed DNS lookup must not be read as "this domain rejects mail"
+  __resetFetch(); __queueMx({ Status: 2 }); // SERVFAIL
+  const r = post({ action: "findEmail", token: TOKEN, payload: { name: "Priya Raman", domain: "acme.com" } });
+  check("an unknown dns result is not treated as invalid", r.data.best.status === "unverified", r.data.best);
+}
+
+console.log("\nemail finder — pluggable verifiers");
+{
+  P.setProperty("VERIFIER", "abstract"); P.setProperty("VERIFIER_API_KEY", "ak");
+  __resetFetch(); __queueFetch({ body: { deliverability: "DELIVERABLE" } });
+  const r = post({ action: "findEmail", token: TOKEN, payload: { name: "Priya Raman", domain: "acme.com" } });
+  check("abstract deliverable verifies", r.data.best.status === "verified", r.data.best);
+  const call = __fetchLog.filter((c) => c.url.indexOf("dns.google") === -1)[0];
+  check("hits abstract's endpoint", /emailvalidation\.abstractapi\.com/.test(call.url), call.url);
+  check("reports which verifier answered", r.data.verifier === "abstract");
+}
+{
+  __resetFetch(); __queueFetch({ body: { deliverability: "UNDELIVERABLE" } });
+  const r = post({ action: "findEmail", token: TOKEN, payload: { name: "Priya Raman", domain: "acme.com" } });
+  check("abstract undeliverable is invalid", r.data.best.status === "invalid", r.data.best);
+}
+{
+  P.setProperty("VERIFIER", "mailboxlayer");
+  __resetFetch(); __queueFetch({ body: { smtp_check: true, format_valid: true, catch_all: false } });
+  const r = post({ action: "findEmail", token: TOKEN, payload: { name: "Priya Raman", domain: "acme.com" } });
+  check("mailboxlayer smtp ok verifies", r.data.best.status === "verified", r.data.best);
+}
+{
+  // a catch-all accepts every address, so it proves nothing about this one
+  __resetFetch(); __queueFetch({ body: { smtp_check: true, format_valid: true, catch_all: true } });
+  const r = post({ action: "findEmail", token: TOKEN, payload: { name: "Priya Raman", domain: "acme.com" } });
+  check("a catch-all domain is not a verification", r.data.best.status === "unverified", r.data.best);
+  check("and says so", /catch-all/.test(r.data.best.reason), r.data.best.reason);
+}
+{
+  P.setProperty("VERIFIER", "nonsense");
+  __resetFetch();
+  const r = post({ action: "findEmail", token: TOKEN, payload: { name: "Priya Raman", domain: "acme.com" } });
+  check("an unknown verifier degrades instead of throwing", r.ok === true && r.data.best.status === "unverified", r.data.best);
+  P.setProperty("VERIFIER", ""); P.setProperty("VERIFIER_API_KEY", "");
+}
+{
+  // the old property still works for anyone who set it up before
+  P.setProperty("HUNTER_API_KEY", "hk");
+  __resetFetch(); __queueFetch({ body: { data: { status: "valid" } } });
+  const r = post({ action: "findEmail", token: TOKEN, payload: { name: "Priya Raman", domain: "acme.com" } });
+  check("HUNTER_API_KEY alone still selects hunter", r.data.verifier === "hunter" && r.data.best.status === "verified", r.data);
+  P.setProperty("HUNTER_API_KEY", "");
 }
 
 console.log("\nemail finder — the send gate");

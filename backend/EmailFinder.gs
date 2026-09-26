@@ -55,18 +55,34 @@ function domainFromJobUrl_(url) {
   }
 }
 
-/** Does anything actually answer on this domain? Cheap sanity check, not proof. */
-function domainResolves_(domain) {
+/**
+ * Does this domain accept mail at all?
+ *
+ * Apps Script has no sockets, so a real SMTP probe is impossible — but DNS over
+ * HTTPS is a plain GET and needs no key, no signup and no quota. A domain with
+ * no MX records cannot receive email from anyone, which makes every pattern
+ * guess against it wrong. That is the single most common way address guessing
+ * fails, and it is free to rule out.
+ *
+ * Returns 'yes' | 'no' | 'unknown' — never a boolean, because "the lookup
+ * failed" must not be mistaken for "this domain rejects mail".
+ */
+function hasMx_(domain) {
+  if (!domain) return 'no';
   try {
-    var res = UrlFetchApp.fetch('https://' + domain, {
-      method: 'get',
-      followRedirects: true,
-      muteHttpExceptions: true,
-      validateHttpsCertificates: false,
-    });
-    return res.getResponseCode() < 400;
+    var res = UrlFetchApp.fetch(
+      'https://dns.google/resolve?name=' + encodeURIComponent(domain) + '&type=MX',
+      { muteHttpExceptions: true }
+    );
+    if (res.getResponseCode() !== 200) return 'unknown';
+    var data = JSON.parse(res.getContentText());
+    if (data.Status === 3) return 'no'; // NXDOMAIN — the domain doesn't exist
+    if (data.Status !== 0) return 'unknown';
+    var answers = data.Answer || [];
+    var mx = answers.filter(function (a) { return a.type === 15; });
+    return mx.length ? 'yes' : 'no';
   } catch (err) {
-    return false; // dns failure, timeout, refused
+    return 'unknown';
   }
 }
 
@@ -82,9 +98,11 @@ function resolveDomain_(company, jobUrl) {
   var slug = companySlug_(company);
   if (!slug) return { domain: '', source: 'none' };
 
+  // Probe by MX, not by whether a website loads: we want a domain that receives
+  // mail, which is not the same question.
   var guesses = [slug + '.com', slug + '.io', slug + '.co', slug + '.ai'];
   for (var i = 0; i < guesses.length; i++) {
-    if (domainResolves_(guesses[i])) return { domain: guesses[i], source: 'guessed' };
+    if (hasMx_(guesses[i]) === 'yes') return { domain: guesses[i], source: 'guessed' };
   }
   return { domain: guesses[0], source: 'unresolved' };
 }
@@ -123,29 +141,106 @@ function patternsFor_(fullName, domain) {
 }
 
 /**
- * Hunter's verifier, if a key is set. Anything other than a clear yes stays
- * 'unverified' — this function must never upgrade a guess on a maybe.
+ * Mailbox verifiers, same shape as the LLM providers: nothing above this map
+ * knows which service answered. Add one by adding an entry.
+ *
+ * Script Properties:
+ *   VERIFIER          hunter | abstract | mailboxlayer   (default: none)
+ *   VERIFIER_API_KEY  that service's key
+ *
+ * HUNTER_API_KEY is still read for backwards compatibility.
+ *
+ * Every adapter returns 'verified' | 'invalid' | 'unverified'. A maybe is
+ * always 'unverified': catch-all domains, greylisting and rate limits all look
+ * like uncertainty, and none of them are permission to email a stranger.
+ */
+var VERIFIERS = {
+  hunter: {
+    // note: hunter refuses free email addresses at signup
+    url: function (email, key) {
+      return 'https://api.hunter.io/v2/email-verifier?email=' +
+        encodeURIComponent(email) + '&api_key=' + encodeURIComponent(key);
+    },
+    read: function (data) {
+      var status = (data.data || {}).status;
+      if (status === 'valid') return { status: 'verified', reason: 'hunter: valid' };
+      if (status === 'invalid') return { status: 'invalid', reason: 'hunter: invalid' };
+      return { status: 'unverified', reason: 'hunter: ' + (status || 'unknown') };
+    },
+  },
+
+  abstract: {
+    // accepts free email addresses at signup — app.abstractapi.com
+    url: function (email, key) {
+      return 'https://emailvalidation.abstractapi.com/v1/?api_key=' +
+        encodeURIComponent(key) + '&email=' + encodeURIComponent(email);
+    },
+    read: function (data) {
+      var deliverable = data.deliverability;
+      if (deliverable === 'DELIVERABLE') return { status: 'verified', reason: 'abstract: deliverable' };
+      if (deliverable === 'UNDELIVERABLE') return { status: 'invalid', reason: 'abstract: undeliverable' };
+      return { status: 'unverified', reason: 'abstract: ' + (deliverable || 'unknown') };
+    },
+  },
+
+  mailboxlayer: {
+    // also accepts free email addresses at signup
+    url: function (email, key) {
+      return 'https://apilayer.net/api/check?access_key=' + encodeURIComponent(key) +
+        '&email=' + encodeURIComponent(email) + '&smtp=1&format=1';
+    },
+    read: function (data) {
+      if (data.smtp_check === true && data.format_valid === true) {
+        // a catch-all domain accepts everything, so it proves nothing
+        if (data.catch_all === true) return { status: 'unverified', reason: 'mailboxlayer: catch-all domain' };
+        return { status: 'verified', reason: 'mailboxlayer: smtp ok' };
+      }
+      if (data.smtp_check === false) return { status: 'invalid', reason: 'mailboxlayer: smtp rejected' };
+      return { status: 'unverified', reason: 'mailboxlayer: inconclusive' };
+    },
+  },
+};
+
+function verifierConfig_() {
+  var key = getProp_('VERIFIER_API_KEY') || getProp_('HUNTER_API_KEY') || '';
+  var name = getProp_('VERIFIER') || (getProp_('HUNTER_API_KEY') ? 'hunter' : '');
+  return { name: name, key: key, adapter: VERIFIERS[name] || null };
+}
+
+/**
+ * Two layers. The MX check is free and always runs; it can only ever prove a
+ * domain is hopeless, which is the most common way a guessed address is wrong.
+ * The mailbox check needs a key and is the only thing that can say 'verified'.
  */
 function verifyEmail_(email) {
-  var key = getProp_('HUNTER_API_KEY');
-  if (!key) return { status: 'unverified', reason: 'no verifier configured' };
+  var domain = String(email).split('@')[1] || '';
+
+  var mx = hasMx_(domain);
+  if (mx === 'no') {
+    return { status: 'invalid', reason: domain + ' does not accept email at all' };
+  }
+
+  var cfg = verifierConfig_();
+  if (!cfg.adapter || !cfg.key) {
+    return {
+      status: 'unverified',
+      reason: mx === 'yes'
+        ? 'domain accepts mail, mailbox unchecked (no verifier configured)'
+        : 'no verifier configured',
+    };
+  }
 
   try {
-    var url =
-      'https://api.hunter.io/v2/email-verifier?email=' +
-      encodeURIComponent(email) +
-      '&api_key=' +
-      encodeURIComponent(key);
-    var res = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
+    var res = UrlFetchApp.fetch(cfg.adapter.url(email, cfg.key), { muteHttpExceptions: true });
     if (res.getResponseCode() !== 200) {
-      return { status: 'unverified', reason: 'verifier http ' + res.getResponseCode() };
+      return { status: 'unverified', reason: cfg.name + ' http ' + res.getResponseCode() };
     }
-    var data = JSON.parse(res.getContentText()).data || {};
-    if (data.status === 'valid') return { status: 'verified', reason: 'verifier says valid' };
-    if (data.status === 'invalid') return { status: 'invalid', reason: 'verifier says invalid' };
-    return { status: 'unverified', reason: 'verifier says ' + (data.status || 'unknown') };
+    var verdict = cfg.adapter.read(JSON.parse(res.getContentText()));
+    return verdict;
   } catch (err) {
-    return { status: 'unverified', reason: 'verifier failed: ' + err };
+    // A verifier being down must never block a send that the user could make
+    // by hand. Degrade to unverified, which still gates the live send.
+    return { status: 'unverified', reason: cfg.name + ' failed: ' + err };
   }
 }
 
@@ -180,7 +275,8 @@ function findEmail_(payload) {
   return {
     domain: resolved.domain,
     domainSource: resolved.source,
-    verifierConfigured: Boolean(getProp_('HUNTER_API_KEY')),
+    verifierConfigured: Boolean(verifierConfig_().adapter && verifierConfig_().key),
+    verifier: verifierConfig_().name || 'none (mx check only)',
     candidates: candidates,
     best: candidates[0],
   };

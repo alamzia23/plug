@@ -92,9 +92,23 @@ let fetchQueue = [];
 global.__queueFetch = (r) => fetchQueue.push(r);
 global.__fetchLog = fetchLog;
 global.__resetFetch = () => { fetchQueue = []; fetchLog.length = 0; };
+// DNS lookups are background noise in most tests, so they answer "has MX"
+// unless a test explicitly queues something else for them.
+let mxDefault = { Status: 0, Answer: [{ type: 15, data: "10 mx.example.com." }] };
+global.__setMx = (v) => { mxDefault = v; };
+const mxQueue = [];
+global.__queueMx = (v) => mxQueue.push(v);
+
 global.UrlFetchApp = {
   fetch: (url, params) => {
+    params = params || {};
     fetchLog.push({ url, params, body: params.payload ? JSON.parse(params.payload) : null });
+
+    if (String(url).indexOf("dns.google") !== -1) {
+      const body = mxQueue.length ? mxQueue.shift() : mxDefault;
+      return { getResponseCode: () => 200, getContentText: () => JSON.stringify(body) };
+    }
+
     const next = fetchQueue.shift();
     if (!next) throw new Error("no queued fetch response for " + url);
     return {
