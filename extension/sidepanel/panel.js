@@ -318,8 +318,13 @@ function wireDraft(node, job) {
 
     if (directory && directory.top.length) {
       showPeople(directory.top);
-      peopleNote.textContent = `${directory.found} people at ${directory.domain}. best ${directory.top.length}:`;
-      domainRow.hidden = true;
+      const where = directory.department ? `${directory.domain} · ${directory.department}` : directory.domain;
+      peopleNote.textContent = directory.weak
+        ? `${directory.found} at ${where}, but none of them look like a good ask. try another domain?`
+        : `${directory.found} people at ${where}. best ${directory.top.length}:`;
+      peopleNote.dataset.tone = directory.weak ? "bad" : "ok";
+      domainRow.hidden = !directory.weak;
+      domainInput.value = directory.domain;
       if (domainOverride) {
         target.domain = domainOverride; // remember the correction for this job
         await saveJobs();

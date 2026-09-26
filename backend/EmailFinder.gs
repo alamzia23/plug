@@ -305,7 +305,28 @@ function hunterFind_(domain, fullName) {
  * Returns an empty list rather than throwing — no key, no coverage and a rate
  * limit all mean the same thing to the caller: fall back to reading a page.
  */
-function hunterDomainSearch_(domain, limit) {
+/**
+ * Which of Hunter's departments a job title belongs to.
+ *
+ * Without this the directory returns whoever it happens to know best, which
+ * skews heavily to executives — a DevOps search came back with a Workplace
+ * Services Partner, a Director of Talent Acquisition and a Director of Data.
+ * Ranking cannot rescue a candidate list with no engineers in it.
+ */
+function departmentFor_(role) {
+  var r = String(role || '').toLowerCase();
+  if (/\b(engineer|developer|devops|sre|software|backend|frontend|full.?stack|data|cloud|infrastructure|platform|security|qa|architect|programmer)\b/.test(r)) return 'it';
+  if (/\b(design|designer|ux|ui|product design)\b/.test(r)) return 'design';
+  if (/\b(product manager|product owner|program manager|project manager)\b/.test(r)) return 'management';
+  if (/\b(sales|account executive|business development)\b/.test(r)) return 'sales';
+  if (/\b(marketing|growth|content|brand)\b/.test(r)) return 'marketing';
+  if (/\b(recruit\w*|talent|people ops)\b/.test(r)) return 'hr'; // \brecruit\b misses "recruiter"
+  if (/\b(finance|accounting|controller)\b/.test(r)) return 'finance';
+  if (/\b(support|success|operations)\b/.test(r)) return 'operations';
+  return '';
+}
+
+function hunterDomainSearch_(domain, limit, role) {
   var cfg = verifierConfig_();
   if (cfg.name !== 'hunter' || !cfg.key || !domain) {
     return { people: [], reason: 'no directory key configured' };
@@ -315,9 +336,17 @@ function hunterDomainSearch_(domain, limit) {
   var want = limit || numSetting_('DIRECTORY_LIMIT', 10);
 
   try {
+    // Ask for the right people rather than filtering afterwards: a filtered
+    // request spends credits on candidates worth ranking, an unfiltered one
+    // spends them on whoever Hunter happens to know.
+    var department = departmentFor_(role);
     var url =
       'https://api.hunter.io/v2/domain-search?domain=' + encodeURIComponent(domain) +
       '&limit=' + want +
+      // junior + senior deliberately omits 'executive'. A VP forwarding you to
+      // a recruiter is worth less than a peer clicking refer.
+      '&seniority=junior,senior' +
+      (department ? '&department=' + encodeURIComponent(department) : '') +
       '&api_key=' + encodeURIComponent(cfg.key);
     var res = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
     var raw = res.getContentText();
@@ -355,9 +384,11 @@ function hunterDomainSearch_(domain, limit) {
 
     return {
       people: people,
+      department: department,
       reason: people.length
         ? people.length + ' of ' + want + ' requested'
-        : 'hunter has no addresses on record for ' + domain,
+        : 'nobody matching' + (department ? ' in ' + department : '') + ' at ' + domain +
+          ' — try a different domain, or widen DIRECTORY_LIMIT',
     };
   } catch (err) {
     return { people: [], reason: 'hunter failed: ' + err };
@@ -376,7 +407,7 @@ function findPeople_(payload) {
 
   if (!resolved.domain) throw new Error("couldn't work out the company's domain — type one in");
 
-  var lookup = hunterDomainSearch_(resolved.domain);
+  var lookup = hunterDomainSearch_(resolved.domain, 0, job.role);
   var people = lookup.people;
   if (!people.length) {
     return {
@@ -408,7 +439,11 @@ function findPeople_(payload) {
     domainSource: resolved.source,
     source: 'hunter',
     reason: lookup.reason,
+    department: lookup.department || '',
     found: people.length,
+    // Say when the best available person still isn't a good ask, rather than
+    // presenting three weak options as though they were a shortlist.
+    weak: (ranked.top[0] || {}).score < 20,
     top: rejoin(ranked.top),
     rest: rejoin(ranked.rest),
   };

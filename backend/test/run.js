@@ -773,6 +773,8 @@ console.log("\npeople — directory search");
   check("one request per lookup", ds.length === 1);
   // hunter bills per revealed address, so the ask has to stay small by default
   check("asks for a modest number of people", /[?&]limit=10\b/.test(ds[0].url), ds[0].url);
+  check("asks for the right department", /[?&]department=it\b/.test(ds[0].url), ds[0].url);
+  check("excludes executives from the ask", /seniority=junior,senior/.test(ds[0].url), ds[0].url);
 }
 {
   setSetting_("DIRECTORY_LIMIT", "3");
@@ -787,7 +789,7 @@ console.log("\npeople — directory search");
   __resetFetch(); __queueFetch({ body: { data: { emails: [] } } });
   const r = post({ action: "findPeople", token: TOKEN, payload: { company: "Acme", domain: "acme.com" } });
   check("an empty directory is reported, not an error", r.ok === true && r.data.source === "hunter-empty", r.data);
-  check("and says the listing was genuinely empty", /no addresses on record/.test(r.data.reason), r.data.reason);
+  check("and says the listing was genuinely empty", /nobody matching/.test(r.data.reason), r.data.reason);
   check("and returns no one rather than inventing anyone", r.data.top.length === 0);
 }
 {
@@ -814,6 +816,36 @@ console.log("\npeople — directory search");
 {
   const noDomain = post({ action: "findPeople", token: TOKEN, payload: { company: "" } });
   check("refuses without a domain it can work out", /domain/.test(noDomain.error), noDomain.error);
+  P.setProperty("VERIFIER", ""); P.setProperty("VERIFIER_API_KEY", "");
+}
+
+{
+  // the department follows the job, and an unknown role asks for everyone
+  check("engineering roles map to it", departmentFor_("Senior DevOps Engineer") === "it");
+  check("design roles map to design", departmentFor_("Product Designer") === "design");
+  check("recruiting roles map to hr", departmentFor_("Technical Recruiter") === "hr");
+  check("an unrecognised role asks for no department", departmentFor_("Chief Vibes Officer") === "");
+}
+{
+  // three weak candidates should be labelled weak, not presented as a shortlist
+  P.setProperty("VERIFIER", "hunter"); P.setProperty("VERIFIER_API_KEY", "hk");
+  __resetFetch();
+  __queueFetch({ body: { data: { emails: [
+    { value: "a@acme.com", first_name: "A", last_name: "One", position: "Workplace Services Partner", confidence: 90 },
+    { value: "b@acme.com", first_name: "B", last_name: "Two", position: "Director of Talent Acquisition", confidence: 90 },
+  ] } } });
+  const r = post({ action: "findPeople", token: TOKEN, payload: {
+    company: "Acme", domain: "acme.com", role: "DevOps Engineer" } });
+  check("a shortlist of bad matches is flagged weak", r.data.weak === true, r.data.top);
+}
+{
+  __resetFetch();
+  __queueFetch({ body: { data: { emails: [
+    { value: "c@acme.com", first_name: "C", last_name: "Three", position: "Senior DevOps Engineer", confidence: 90 },
+  ] } } });
+  const r = post({ action: "findPeople", token: TOKEN, payload: {
+    company: "Acme", domain: "acme.com", role: "DevOps Engineer" } });
+  check("a real match is not flagged weak", r.data.weak === false, r.data.top);
   P.setProperty("VERIFIER", ""); P.setProperty("VERIFIER_API_KEY", "");
 }
 

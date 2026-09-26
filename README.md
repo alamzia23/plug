@@ -256,6 +256,14 @@ company's domain and asks Hunter's Domain Search who works there — names, titl
 addresses, no page to open and no LinkedIn involved. Addresses come back attached, so
 the `find` step is already done.
 
+**It asks for the right people, not just any people.** The request carries a
+`department` derived from the job title (`DevOps Engineer` → `it`) and
+`seniority=junior,senior`, which omits executives. Without those filters a DevOps
+search came back with a Workplace Services Partner, a Director of Talent Acquisition
+and a Director of Data & AI — ranking can't rescue a candidate list with no engineers
+in it. When the best available person still isn't a good ask, the panel says so rather
+than presenting three weak options as a shortlist.
+
 **Hunter charges one credit per revealed address**, not per company. A free plan is
 about 50 a month, so a lookup asking for 25 people could cost half a month in one
 click — and only `MAX_CONTACTS_PER_JOB` of them ever get used. `DIRECTORY_LIMIT`
