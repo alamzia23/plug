@@ -6,7 +6,7 @@ A personal referral agent: capture a job page, find the right people at that com
 draft a personal referral email + tailored resume, send it from your Gmail after you
 approve, and follow up automatically.
 
-Status: **day 5 done — email finder.** Every email goes to your test inbox until you
+Status: **day 6 done — replies and follow-ups.** Every email goes to your test inbox until you
 turn `DRY_RUN` off yourself. Nothing sends mail yet; captured jobs
 sync to a Google Sheet you own.
 
@@ -214,6 +214,41 @@ path to a guessed address that doesn't pass through being told it's a guess.
 you can't get a key. That's fine: skip it, everything stays `unverified`, and you
 confirm each live send. Verification is a convenience, not a dependency.
 
+## Replies and follow-ups (day 6)
+
+A daily trigger (`dailyReplyCheck`, ~9am) walks the `outreach` log:
+
+- **someone who isn't you replied** → status `replied`, and it never nudges again
+- **3 days of silence** → one nudge
+- **7 days** → the second and final one, which says it's the last
+- **14 days** → `ghosted`
+
+Two nudges is the ceiling. That's where the curve flattens: the first recovers the
+emails that were simply missed, the second catches the genuinely busy, and a third only
+reaches people who have already decided.
+
+**Follow-ups reply inside the original thread**, never as a new email. A new email makes
+the recipient rebuild the context and reads like a third stranger rather than a second
+nudge.
+
+**Reply detection degrades rather than failing.** `thread_id` is the reliable route, but
+Gmail sometimes hasn't indexed a just-sent message when we look for it, so a missing id
+falls back to a subject search. On a dry run every message is from you, so there the
+signal is simply that the thread grew — which keeps follow-ups testable without
+pretending a test is a real reply.
+
+Nudges count against `DAILY_CAP` like any other send. Running the check twice in a day
+changes nothing the second time; every decision comes from the sheet.
+
+### Setting up the trigger
+
+Run **`installDailyTrigger`** once from the Apps Script editor. It clears its own old
+trigger first, so running it again never stacks duplicates. `removeDailyTrigger()`
+turns it off.
+
+The panel shows a tracker: a streak, a count per status, and a warning when the trigger
+isn't installed.
+
 ## The site (`site/`)
 
 The public landing page and blog, built with **Astro 5** — static output, zero JS by
@@ -254,6 +289,7 @@ backend/
   Providers.gs           # gemini | anthropic | openai, behind one call
   Mail.gs                # the only path to gmail: dry run, caps, outreach log
   EmailFinder.gs         # domain + pattern guessing, optional verification
+  Followups.gs           # daily reply check, nudges, ghosting, tracker
   Llm.gs                 # provider-neutral prompts + parsing
   Resume.gs              # dummy master resume
   Setup.gs               # setUp(): makes the sheet, token and defaults
@@ -274,7 +310,7 @@ Selectors were run against real postings, not guessed:
 
 ## Known gaps (day 1)
 
-- No reply detection or people finder. Days 6–7.
+- No people finder yet. Day 7.
 - The contact is dummy data (`priya raman`), editable per card, until the people finder
   lands on day 7.
 - Drafts live in `chrome.storage.local`, not the Sheet. Day 4 logs sends to `outreach`.

@@ -34,6 +34,12 @@ var ROUTES = {
   findEmail: function (payload) {
     return findEmail_(payload);
   },
+  tracker: function () {
+    return tracker_();
+  },
+  runFollowups: function () {
+    return dailyReplyCheck();
+  },
   llmInfo: function () {
     var name = providerName_();
     var p = PROVIDERS[name];

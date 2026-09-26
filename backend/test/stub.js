@@ -20,7 +20,10 @@ let uuidN = 0;
 // real Apps Script uuids are 36 chars (32 hex + 4 dashes)
 global.Utilities = { getUuid: () => { const n = String(++uuidN).padStart(8, "0"); return `${n}-aaaa-bbbb-cccc-ddddeeeeffff`; } };
 
-global.Session = { getEffectiveUser: () => ({ getEmail: () => "you@example.com" }) };
+global.Session = {
+  getEffectiveUser: () => ({ getEmail: () => "you@example.com" }),
+  getScriptTimeZone: () => "Asia/Kolkata",
+};
 
 global.ContentService = {
   MimeType: { JSON: "json", TEXT: "text" },
@@ -122,12 +125,49 @@ global.UrlFetchApp = {
 const sent = [];
 global.__sent = sent;
 global.__resetSent = () => { sent.length = 0; };
+// Threads are scripted per test: __setThread describes what a lookup finds.
+let threadModel = { from: ["you@example.com"] }; // most tests just need a thread to exist
+const replies = [];
+global.__replies = replies;
+global.__setThread = (m) => { threadModel = m; };
+global.__resetThreads = () => { threadModel = null; replies.length = 0; };
+
+function fakeThread() {
+  if (!threadModel) return null;
+  return {
+    getId: () => threadModel.id || "thread-1",
+    getMessages: () =>
+      (threadModel.from || ["me@example.com"]).map((f) => ({ getFrom: () => f })),
+    reply: (body) => {
+      if (threadModel.replyThrows) throw new Error("gmail said no");
+      replies.push(body);
+    },
+  };
+}
+
 global.GmailApp = {
   sendEmail: (to, subject, body, opts) => sent.push({ to, subject, body, opts }),
-  search: () => [{ getId: () => "thread-" + (sent.length || 0) }],
+  search: () => { const t = fakeThread(); return t ? [t] : []; },
+  getThreadById: () => fakeThread(),
 };
 
-for (const f of ["Sheet.gs", "Providers.gs", "Resume.gs", "Llm.gs", "Mail.gs", "EmailFinder.gs", "Api.gs", "Setup.gs"]) {
+const triggers = [];
+global.__triggers = triggers;
+global.ScriptApp = {
+  getProjectTriggers: () => triggers.slice(),
+  deleteTrigger: (t) => { const i = triggers.indexOf(t); if (i !== -1) triggers.splice(i, 1); },
+  newTrigger: (fn) => ({
+    timeBased: () => ({
+      everyDays: () => ({
+        atHour: () => ({
+          create: () => { const t = { getHandlerFunction: () => fn }; triggers.push(t); return t; },
+        }),
+      }),
+    }),
+  }),
+};
+
+for (const f of ["Sheet.gs", "Providers.gs", "Resume.gs", "Llm.gs", "Mail.gs", "EmailFinder.gs", "Followups.gs", "Api.gs", "Setup.gs"]) {
   (0, eval)(fs.readFileSync(require("path").join(__dirname, "..", f), "utf8"));
 }
 module.exports = { props, books };

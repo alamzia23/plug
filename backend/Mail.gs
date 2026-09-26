@@ -24,7 +24,7 @@ function sendReferral_(payload) {
   // eagerly, so Session.getEffectiveUser() would run on every send even when
   // TEST_INBOX is set — dragging in a scope this function never actually needs.
   var testInbox = getSetting_('TEST_INBOX', '') || Session.getEffectiveUser().getEmail();
-  var cap = Number(getSetting_('DAILY_CAP', '25')) || 25;
+  var cap = numSetting_('DAILY_CAP', 25);
 
   var realTo = String(contact.email || '').trim();
 
@@ -69,6 +69,9 @@ function sendReferral_(payload) {
     last_action_at: new Date().toISOString(),
     dry_run: dryRun ? 'true' : 'false',
     real_to: realTo,
+    contact_name: contact.name || '',
+    company: job.company || '',
+    role: job.role || '',
   };
   var sheet = tab_('outreach');
   sheet.appendRow(rowFor_(sheet, row));
@@ -114,7 +117,7 @@ function isEmail_(s) {
 
 /** What the panel needs to label the send button honestly. */
 function sendStatus_() {
-  var cap = Number(getSetting_('DAILY_CAP', '25')) || 25;
+  var cap = numSetting_('DAILY_CAP', 25);
   var sent = countSentToday_();
   return {
     dryRun: getSetting_('DRY_RUN', 'true') === 'true',

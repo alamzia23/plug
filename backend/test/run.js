@@ -548,5 +548,151 @@ console.log("\nemail finder — the send gate");
   setSetting_("DRY_RUN", "true");
 }
 
+console.log("\nfollow-ups");
+// Build outreach rows directly so the clock can be controlled.
+function seedOutreach(daysAgo, extra) {
+  const sheet = tab_("outreach");
+  const sentAt = new Date(Date.now() - daysAgo * 86400000).toISOString();
+  const row = Object.assign(
+    { id: "o-" + Math.random().toString(36).slice(2), job_id: "j1", to_email: "priya@acme.com",
+      subject: "referral for the frontend role?", thread_id: "t1", status: "sent",
+      sent_at: sentAt, followups: 0, dry_run: "false", real_to: "priya@acme.com",
+      contact_name: "Priya Raman", company: "Acme", role: "Frontend Engineer" },
+    extra || {}
+  );
+  sheet.appendRow(rowFor_(sheet, row));
+  return row.id;
+}
+const rowById = (id) => readAll_("outreach").find((r) => r.id === id);
+
+{
+  // fresh send: too early for a nudge
+  __resetThreads(); __setThread({ from: ["you@example.com"] });
+  const id = seedOutreach(1);
+  dailyReplyCheck();
+  check("day 1 is left alone", rowById(id).status === "sent" && __replies.length === 0, rowById(id).status);
+}
+{
+  __resetThreads(); __resetSent(); __setThread({ from: ["you@example.com"] });
+  const id = seedOutreach(3);
+  const out = dailyReplyCheck();
+  check("day 3 gets the first nudge", Number(rowById(id).followups) === 1, rowById(id).followups);
+  check("status becomes nudged", rowById(id).status === "nudged");
+  check("it replies in-thread, not as a new email", __replies.length === 1 && __sent.length === 0, { replies: __replies.length, sent: __sent.length });
+  check("the nudge is short", __replies[0].split(/\s+/).length < 45, __replies[0].split(/\s+/).length);
+  check("it names the role", /Frontend Engineer/.test(__replies[0]));
+  check("it offers an exit", /fine to be told no/i.test(__replies[0]), __replies[0]);
+  check("summary counts it", out.nudged >= 1, out);
+}
+{
+  // same day, second pass: must not nudge twice
+  __resetThreads(); __setThread({ from: ["you@example.com"] });
+  const id = seedOutreach(3);
+  dailyReplyCheck();
+  const after = __replies.length;
+  dailyReplyCheck();
+  check("running twice in a day nudges once", __replies.length === after, { after, now: __replies.length });
+  check("still one follow-up recorded", Number(rowById(id).followups) === 1);
+}
+{
+  __resetThreads(); __setThread({ from: ["you@example.com"] });
+  const id = seedOutreach(7, { followups: 1, status: "nudged" });
+  dailyReplyCheck();
+  check("day 7 gets the second nudge", Number(rowById(id).followups) === 2, rowById(id).followups);
+  check("the last one says it is the last", /Last nudge/i.test(__replies[__replies.length - 1]), __replies[__replies.length - 1]);
+}
+{
+  __resetThreads(); __setThread({ from: ["you@example.com"] });
+  const id = seedOutreach(9, { followups: 2, status: "nudged" });
+  dailyReplyCheck();
+  check("two is the ceiling — no third nudge", __replies.length === 0, __replies);
+  check("not ghosted yet at day 9", rowById(id).status === "nudged", rowById(id).status);
+}
+{
+  __resetThreads(); __setThread({ from: ["you@example.com"] });
+  const id = seedOutreach(15, { followups: 2, status: "nudged" });
+  dailyReplyCheck();
+  check("silence past 14 days is ghosted", rowById(id).status === "ghosted", rowById(id).status);
+}
+
+console.log("\nfollow-ups — replies stop everything");
+{
+  __resetThreads(); __setThread({ from: ["you@example.com", "priya@acme.com"] });
+  const id = seedOutreach(5);
+  dailyReplyCheck();
+  check("a message from someone else is a reply", rowById(id).status === "replied", rowById(id).status);
+  check("a replied thread is never nudged", __replies.length === 0, __replies);
+}
+{
+  // our own messages are not replies, however many there are
+  __resetThreads(); __setThread({ from: ["you@example.com", "Alamzia <you@example.com>"] });
+  const id = seedOutreach(3);
+  dailyReplyCheck();
+  check("our own follow-ups don't count as a reply", rowById(id).status !== "replied", rowById(id).status);
+}
+{
+  // on a dry run every message is from us, so a longer thread is the signal
+  __resetThreads(); __setThread({ from: ["you@example.com", "you@example.com"] });
+  const id = seedOutreach(5, { dry_run: "true" });
+  dailyReplyCheck();
+  check("dry run treats a grown thread as a reply", rowById(id).status === "replied", rowById(id).status);
+}
+{
+  __resetThreads(); __setThread({ from: ["you@example.com"] });
+  const id = seedOutreach(5, { status: "replied" });
+  dailyReplyCheck();
+  check("a replied row is skipped entirely", __replies.length === 0);
+}
+
+console.log("\nfollow-ups — degrading safely");
+{
+  // thread_id gone: fall back to the subject search rather than give up
+  __resetThreads(); __setThread({ from: ["you@example.com"] });
+  const id = seedOutreach(3, { thread_id: "" });
+  dailyReplyCheck();
+  check("a missing thread_id still nudges via subject search", Number(rowById(id).followups) === 1, rowById(id));
+}
+{
+  __resetThreads(); // no thread findable at all
+  const id = seedOutreach(3, { thread_id: "" });
+  const out = dailyReplyCheck();
+  check("no thread means skip, not crash", rowById(id).status === "sent" && out.skipped >= 1, out);
+}
+{
+  __resetThreads(); __setThread({ from: ["you@example.com"], replyThrows: true });
+  const id = seedOutreach(3);
+  const out = dailyReplyCheck();
+  check("a failed reply doesn't count as sent", Number(rowById(id).followups) === 0, rowById(id).followups);
+  check("and is reported as skipped", out.skipped >= 1, out);
+}
+{
+  setSetting_("DAILY_CAP", "0");
+  __resetThreads(); __setThread({ from: ["you@example.com"] });
+  const id = seedOutreach(3);
+  dailyReplyCheck();
+  check("the daily cap applies to nudges too", Number(rowById(id).followups) === 0, rowById(id).followups);
+  check("a cap of 0 means 0, not the default", numSetting_("DAILY_CAP", 25) === 0, numSetting_("DAILY_CAP", 25));
+  setSetting_("DAILY_CAP", "25");
+}
+
+console.log("\ntrigger + tracker");
+{
+  __triggers.length = 0;
+  installDailyTrigger();
+  check("trigger installed", __triggers.length === 1, __triggers.length);
+  installDailyTrigger();
+  check("installing twice doesn't stack triggers", __triggers.length === 1, __triggers.length);
+  check("tracker reports it is installed", post({ action: "tracker", token: TOKEN, payload: {} }).data.triggerInstalled === true);
+  removeDailyTrigger();
+  check("trigger removable", __triggers.length === 0);
+}
+{
+  const t = post({ action: "tracker", token: TOKEN, payload: {} }).data;
+  check("tracker returns rows", Array.isArray(t.rows) && t.rows.length > 0, t.total);
+  check("tracker counts statuses", typeof t.counts.replied === "number", t.counts);
+  check("streak counts today", t.streak >= 1, t.streak);
+  check("tracker hides sheet row numbers", t.rows.every((r) => r._row === undefined));
+}
+
 console.log(`\n${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);

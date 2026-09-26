@@ -667,3 +667,54 @@ details[open] > .jd-summary::before {
   margin-left: auto;
   text-transform: lowercase;
 }
+
+/* ---------- tracker ---------- */
+
+.tracker {
+  padding: 14px var(--pad);
+  border-top: var(--line);
+}
+
+.tracker-top {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.streak {
+  font-size: 12px;
+  margin-right: auto;
+}
+
+.streak[data-hot="true"] {
+  color: var(--hot);
+}
+
+.tracker-counts {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.count {
+  border: var(--line);
+  border-radius: 2px;
+  padding: 2px 7px;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+}
+
+.count[data-kind="replied"] {
+  border-color: var(--hot);
+  color: var(--hot);
+}
+
+.count[data-kind="ghosted"] {
+  opacity: 0.55;
+}
+
+#tracker-note {
+  font-size: 10px;
+  margin: 10px 0 0;
+}

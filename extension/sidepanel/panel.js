@@ -19,6 +19,11 @@ const els = {
   cfgSave: document.getElementById("cfg-save"),
   cfgState: document.getElementById("cfg-state"),
   syncState: document.getElementById("sync-state"),
+  tracker: document.getElementById("tracker"),
+  streak: document.getElementById("streak"),
+  trackerCounts: document.getElementById("tracker-counts"),
+  trackerNote: document.getElementById("tracker-note"),
+  trackerRefresh: document.getElementById("tracker-refresh"),
   syncAll: document.getElementById("sync-all"),
 };
 
@@ -358,6 +363,7 @@ function wireDraft(node, job) {
       sendInfo.remaining = Math.max(0, (sendInfo.remaining ?? 1) - 1);
       paintSendState();
       say(result.dryRun ? `dry run sent to ${result.sentTo}. check that inbox.` : `sent to ${result.sentTo}.`);
+      refreshTracker();
     } catch (err) {
       say("send failed: " + (err.message || err), "bad");
       btnSend.disabled = false;
@@ -582,6 +588,50 @@ async function saveBackendForm() {
 els.capture.addEventListener("click", capture);
 els.cfgSave.addEventListener("click", saveBackendForm);
 els.syncAll.addEventListener("click", syncAll);
+els.trackerRefresh.addEventListener("click", async () => {
+  els.trackerRefresh.textContent = "…";
+  await refreshTracker();
+  els.trackerRefresh.textContent = "refresh";
+});
+
+// Statuses live on the backend, not in chrome.storage — a reply is noticed by
+// the daily trigger, which the panel never sees happen.
+async function refreshTracker() {
+  if (!backendConfigured) {
+    els.tracker.hidden = true;
+    return;
+  }
+  try {
+    const t = await callBackend("tracker");
+    els.tracker.hidden = false;
+
+    els.streak.textContent = t.streak > 0 ? `🔥 ${t.streak} day streak` : "no streak yet";
+    els.streak.dataset.hot = String(t.streak >= 3);
+
+    els.trackerCounts.replaceChildren();
+    for (const [kind, n] of Object.entries(t.counts)) {
+      if (!n) continue;
+      const el = document.createElement("span");
+      el.className = "count";
+      el.dataset.kind = kind;
+      el.textContent = `${n} ${kind}`;
+      els.trackerCounts.append(el);
+    }
+    if (!t.total) {
+      const el = document.createElement("span");
+      el.className = "count";
+      el.textContent = "nothing sent yet";
+      els.trackerCounts.append(el);
+    }
+
+    els.trackerNote.textContent = t.triggerInstalled
+      ? "checking for replies daily. no reply in 3 days? it nudges once, then once more, then stops."
+      : "the daily reply check isn't installed — run installDailyTrigger() in apps script.";
+    els.trackerNote.dataset.tone = t.triggerInstalled ? "ok" : "bad";
+  } catch {
+    els.tracker.hidden = true;
+  }
+}
 
 async function refreshSendInfo() {
   if (!backendConfigured) return;
@@ -600,4 +650,5 @@ async function refreshSendInfo() {
   render();
   await refreshSendInfo();
   render();
+  await refreshTracker();
 })();

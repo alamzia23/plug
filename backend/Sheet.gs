@@ -19,6 +19,8 @@ var SCHEMAS = {
     'thread_id', 'status', 'sent_at', 'followups', 'last_action_at',
     // kept so a dry run is never mistaken for a real send when reading the sheet
     'dry_run', 'real_to',
+    // the follow-up writes itself from these, without re-reading the job
+    'contact_name', 'company', 'role',
   ],
   settings: ['key', 'value', 'notes'],
 };
@@ -151,6 +153,17 @@ function getSetting_(key, fallback) {
     return String(r.key) === key;
   })[0];
   return hit && hit.value !== '' ? String(hit.value) : fallback;
+}
+
+/**
+ * Numeric settings need this rather than `Number(x) || fallback`: zero is a
+ * legitimate value — "stop sending" — and `||` silently turns it into the
+ * default, which is the opposite of what was asked for.
+ */
+function numSetting_(key, fallback) {
+  var raw = getSetting_(key, '');
+  var n = Number(raw);
+  return raw !== '' && isFinite(n) ? n : fallback;
 }
 
 function setSetting_(key, value, notes) {
