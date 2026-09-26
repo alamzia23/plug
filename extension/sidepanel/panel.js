@@ -262,7 +262,9 @@ function wireDraft(node, job) {
           senior: "senior — carries the most weight",
           recruiter: "recruiter — paid to reply",
         };
-        const bits = [KIND[p.kind], ...(p.reasons || [])].filter(Boolean);
+        // Drop a reason the kind label already said — "recruiter · recruiter".
+        const extra = (p.reasons || []).filter((r) => r !== p.kind);
+        const bits = [KIND[p.kind], ...extra].filter(Boolean);
         why.textContent = bits.length ? bits.join(" · ") : "no strong signal";
 
       b.append(who, why);
