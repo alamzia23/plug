@@ -1,13 +1,36 @@
-# secrets — never commit
+# secrets and credentials — never commit
+.env
+.env.*
+!.env.example
 backend/.clasp.json
 backend/.clasprc.json
-.env
-*.local
+*.pem
+*.key
+credentials*.json
+client_secret*.json
+service-account*.json
 
-# noise
-node_modules/
-.DS_Store
+# local data: sheet exports, captured jobs, anything pulled out of the app
+*.csv
+*.tsv
+exports/
+data/
+*.dump
+
+# logs
 *.log
+logs/
+
+# build output and dependencies
+node_modules/
+site/dist/
+site/.astro/
+
+# os / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
 
 # local-only notes
 NOTES.md

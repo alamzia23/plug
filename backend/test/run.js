@@ -791,7 +791,7 @@ const crowd = [
   check("the full school name matches", full.reasons.indexOf("alumni") !== -1, full.reasons);
 
   const alias = post({ action: "rankPeople", token: TOKEN, payload: {
-    people: [{ name: "B", title: "Platform Engineer, EIT alum" }],
+    people: [{ name: "B", title: "Platform Engineer, " + MASTER_RESUME.education[0].aliases[0] + " alum" }],
     job: { role: "DevOps Engineer" } } }).data.top[0];
   check("an abbreviation matches too", alias.reasons.indexOf("alumni") !== -1, alias.reasons);
 

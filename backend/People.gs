@@ -64,7 +64,7 @@ function scorePerson_(person, job, resume) {
   var score = 0;
 
   // A shared school is the strongest opener a stranger can have — but a
-  // headline says "EIT", not "Example Institute of Technology",
+  // headline says the abbreviation, never the full institution name,
   // so the full name alone almost never matches. Aliases are how this fires.
   var schools = [];
   (resume.education || []).forEach(function (e) {
