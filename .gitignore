@@ -31,6 +31,3 @@ site/.astro/
 Thumbs.db
 .idea/
 .vscode/
-
-# local-only notes
-NOTES.md
